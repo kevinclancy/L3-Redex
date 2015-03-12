@@ -1,5 +1,6 @@
 #lang racket
 (require redex)
+(require racket/set)
 
 (define-language L3
   ;expressions
@@ -47,6 +48,9 @@
      (∀ P T) ; location abstraction type
      (∃ P T)); location package type
   (store ((L v) ...))
+  (U ♭ ♯) ; \flat = ♭ means unused, \sharp = ♯ means used
+  (type-env ((U X T) ...))
+  (loc-env (P ...))
   ;evaluation contexts
   (E hole
      (let * = E in e)
@@ -123,73 +127,104 @@
   FreeVars : e -> (X ...)
   [(FreeVars e) (FV () e)])
   
-(module+ test
-  (require rackunit)
-  (check-equal? (term (FreeVars (λ (x I) *))) '())
-  (check-equal? (term (FreeVars ((λ (x I) z) y))) '(z y))
-  (check-equal? (term (FreeVars (let (x / y) = (x z) in (x y)))) '(x z)))
+;(module+ test
+;  (require rackunit)
+;  (check-equal? (term (FreeVars (λ (x I) *))) '())
+;  (check-equal? (term (FreeVars ((λ (x I) z) y))) '(z y))
+;  (check-equal? (term (FreeVars (let (x / y) = (x z) in (x y)))) '(x z)))
+
+;     I
+;     (T ⊗ T) ;tensor product. \otimes + alt-\ gives ⊗
+;     (T -o T) ;linear function
+;     (! T) ; unrestricted "of course" type
+;     (Ptr loc) ;type of pointer to location w
+;     (Cap loc T) ;capability for location w, where the value stored at w has type T
+;     (∀ P T) ; location abstraction type
+;     (∃ P T)); location package type
 
 (define-metafunction L3
-  FL : (P ...) e -> (P ...)
-  [(FL (P ...) *) ()]
-  [(FL (P ...) (let * = e_1 in e_2))
-   (P_fp1 ... P_fp2 ...) 
-   (where (P_fp1 ...) (FL (P ...) e_1))
-   (where (P_fp2 ...) (FL (P_fp1 ... P ...) e_2))]  
-  [(FL (P ...) (e_1 / e_2))
-   (P_fp1 ... P_fp2 ...)
-   (where (P_fp1 ...) (FL (P ...) e_1))
-   (where (P_fp2 ...) (FL (P_fp1 ... P ...) e_2))]
-  [(FL (P ...) (let (X_1 / X_2) = e_1 in e_2))
-   (P_fp1 ... P_fp2 ...) 
-   (where (P_fp1 ...) (FL (P ...) e_1))
-   (where (P_fp2 ...) (FL (P_fp1 ... P ...) e_2))]
-  [(FL (P ...) X) ()]
-  [(FL (P ...) (λ (X T) e)) (FL (P ...) e)]
-  [(FL (P ...) (e_1 e_2)) 
-   (P_fp1 ... P_fp2 ...)
-   (where (P_fp1 ...) (FL (P ...) e_1))
-   (where (P_fp2 ...) (FL (P_fp1 ... P ...) e_2))]
-  [(FL (P ...) (! X)) ()]
-  [(FL (P ...) (! e)) (FL (P ...) e)]
-  [(FL (P ...) (let (! X) = e_1 in e_2))
-   (P_fp1 ... P_fp2 ...)
-   (where (P_fp1 ...) (FL (P ...) e_1))
-   (where (P_fp2 ...) (FL (P_fp1 ... P ...) e_2))]
-  [(FL (P ...) (dupl e)) (FL (P ...) e)]
-  [(FL (P ...) (drop e)) (FL (P ...) e)]
-  [(FL (P ...) (ptr L)) ()]
-  [(FL (P ...) cap) ()]
-  [(FL (P ...) (new e)) (FL (P ...) e)] 
-  [(FL (P ...) (free e)) (FL (P ...) e)]
-  [(FL (P ...) (swap e_1 e_2 e_3))
-   (P_fp1 ... P_fp2 ... P_fp3 ...)
-   (where (P_fp1 ...) (FL (P ...) e_1))
-   (where (P_fp2 ...) (FL (P_fp1 ... P ...) e_2))
-   (where (P_fp3 ...) (FL (P_fp1 ... P_fp2 ... P ...) e_3))]
-  [(FL (P_env ...) (Λ P e)) (FL (P P_env ...) e)]
-  [(FL (P_env ...) (e L)) (FV (P_env ...) e)] 
-  [(FL (P_env1 ... P P_env2 ...) (e p)) 
-   (FV (P_env1 ... P P_env2 ...) e)]  
-  [(FL (P_env ...) (e p)) 
-   (P_e ... p)
-   (where (P_e ...) (FV (P_env ...) e))]
-  [(FL (P ...) (L // e)) (FV (P ...) e)]
-  [(FL (P_env1 ... P P_env2 ...) (P // e)) 
-   (P_e ...)
-   (where (P_e ...) (FL (P_env1 ... P P_env2 ...) e))]
-  [(FL (P_env ...) (P // e))
-   (P P_e ...)
-   (where (P_e ...) (FL (P_env ...) e))]
-  [(FL (P_env ...) (let (P // X) = e_1 in e_2))
-   (P_fp1 ... P_fp2 ...)
-   (where (P_fp1 ...) (FV (P_env ...) e_1))
-   (where (P_fp2 ...) (FV (P P_fp1 ... P_env ...) e_2))])
-
+  type-FL : (loc ...) T -> (loc ...)
+  [(type-FL (loc ...) I) ()]
+  [(type-FL (loc ...) (T_1 ⊗ T_2)) 
+   (loc_FL1 ... loc_FL2 ...)
+   (where (loc_FL1 ...) (type-FL (loc ...) T_1))
+   (where (loc_FL2 ...) (type-FL (loc ... loc_FL1 ...) T_2))]
+  [(type-FL (loc ...) (T_1 -o T_2))
+   (loc_FL1 ... loc_FL2 ...)
+   (where (loc_FL1 ...) (type-FL (loc ...) T_1))
+   (where (loc_FL2 ...) (type-FL (loc ... loc_FL1 ...) T_2))]
+  [(type-FL (loc ...) (! T)) (type-FL (loc ...) T)]
+  [(type-FL (loc_env1 ... loc loc_env2 ...) (Ptr loc)) ()]
+  [(type-FL (loc_env ...) (Ptr loc)) (loc)]
+  [(type-FL (loc_env1 ... loc loc_env2 ...) (Cap loc T)) (type-FL (loc_env1 ... loc loc_env2 ...) T)]
+  [(type-FL (loc_env ...) (Cap loc T)) 
+   (loc loc_T ...)
+   (where (loc_T ...) (type-FL (loc loc_env ...) T))]
+  [(type-FL (loc_env ...) (∀ P T)) (type-FL (loc loc_env ...) T)]
+  [(type-FL (loc_env ...) (∃ P T)) (type-FL (loc loc_env ...) T)])
+  
+(define-metafunction L3
+  type-FreeLocs : T -> (loc ...)
+  [(type-FreeLocs T) (type-FL () T)])
 
 (define-metafunction L3
-  FreeLocVars : e -> (P ...)
-  [(FreeLocVars e) (FL () e)])
+  FL : (loc ...) e -> (loc ...)
+  [(FL (loc ...) *) ()]
+  [(FL (loc ...) (let * = e_1 in e_2))
+   (loc_floc1 ... loc_floc2 ...) 
+   (where (loc_floc1 ...) (FL (loc ...) e_1))
+   (where (loc_floc2 ...) (FL (loc_floc1 ... loc ...) e_2))]  
+  [(FL (loc ...) (e_1 / e_2))
+   (loc_floc1 ... loc_floc2 ...)
+   (where (loc_floc1 ...) (FL (loc ...) e_1))
+   (where (loc_floc2 ...) (FL (loc_floc1 ... loc ...) e_2))]
+  [(FL (loc ...) (let (X_1 / X_2) = e_1 in e_2))
+   (loc_floc1 ... loc_floc2 ...) 
+   (where (loc_floc1 ...) (FL (loc ...) e_1))
+   (where (loc_floc2 ...) (FL (loc_floc1 ... loc ...) e_2))]
+  [(FL (loc ...) X) ()]
+  [(FL (loc ...) (λ (X T) e))
+   (loc_T ... loc_e ...)
+   (where (loc_T ...) (type-FL (loc ...) T))
+   (where (loc_e ...) (FL (loc ... loc_T ...) e))]
+  [(FL (loc ...) (e_1 e_2)) 
+   (loc_floc1 ... loc_floc2 ...)
+   (where (loc_floc1 ...) (FL (loc ...) e_1))
+   (where (loc_floc2 ...) (FL (loc_floc1 ... loc ...) e_2))]
+  [(FL (loc ...) (! X)) ()]
+  [(FL (loc ...) (! e)) (FL (loc ...) e)]
+  [(FL (loc ...) (let (! X) = e_1 in e_2))
+   (loc_floc1 ... loc_floc2 ...)
+   (where (loc_floc1 ...) (FL (loc ...) e_1))
+   (where (loc_floc2 ...) (FL (loc_floc1 ... loc ...) e_2))]
+  [(FL (loc ...) (dupl e)) (FL (loc ...) e)]
+  [(FL (loc ...) (drop e)) (FL (loc ...) e)]
+  [(FL (loc_0 ... L loc_1 ...) (ptr L)) ()]
+  [(FL (loc ...) (ptr L)) (L)]
+  [(FL (loc ...) cap) ()]
+  [(FL (loc ...) (new e)) (FL (loc ...) e)] 
+  [(FL (loc ...) (free e)) (FL (loc ...) e)]
+  [(FL (loc ...) (swap e_1 e_2 e_3))
+   (loc_floc1 ... loc_floc2 ... loc_floc3 ...)
+   (where (loc_floc1 ...) (FL (loc ...) e_1))
+   (where (loc_floc2 ...) (FL (loc_floc1 ... loc ...) e_2))
+   (where (loc_floc3 ...) (FL (loc_floc1 ... loc_floc2 ... loc ...) e_3))]
+  [(FL (loc_env ...) (Λ P e)) (FL (P loc_env ...) e)]
+  [(FL (loc_env0 ... loc loc_env1 ...) (e loc)) (FV (loc_env0 ... loc loc_env1 ...) e)]
+  [(FL (loc_env ...) (e loc)) (loc_e ... loc)
+   (where (loc_e ...) (FL (loc_env ...) e))] 
+  [(FL (loc_env0 ... loc loc_env1 ...) (loc // e)) (FV (loc_env0 ... loc loc_env1 ...) e)]
+  [(FL (loc_env ...) (loc // e)) 
+   (loc loc_e ...)
+   (where (loc_e ...) (FL (loc_env ...) e))]
+  [(FL (loc_env ...) (let (P // X) = e_1 in e_2))
+   (loc_floc1 ... loc_floc2 ...)
+   (where (loc_floc1 ...) (FL (loc_env ...) e_1))
+   (where (loc_floc2 ...) (FL (P loc_floc1 ... loc_env ...) e_2))])
+
+(define-metafunction L3
+  FreeLocs : e -> (loc ...)
+  [(FreeLocs e) (FL () e)])
 
 ;location substitution for types
 (define-metafunction L3
@@ -282,12 +317,12 @@
   [(subst (swap e_1 e_2 e_3) X v) (swap (subst e_1 X v) (subst e_2 X v) (subst e_3 X v))]
   [(subst (Λ P e) X v) 
    (Λ P_prime (subst (substp e P P_prime) X v))
-   (where P_prime ,(variable-not-in (term ((FreeLocVars e) (FreeLocVars v))) (term P)))]
+   (where P_prime ,(variable-not-in (term ((FreeLocs e) (FreeLocs v))) (term P)))]
   [(subst (e loc) X v) ((subst e X v) loc)]
   [(subst (loc // e) X v) (loc // (subst e X v))]
   [(subst (let (P // X) = e_1 in e_2) X v)
    (let (P_prime // X) = (subst e_1 X v) in (subst (substp e_2 P P_prime) X v))
-   (where (P_prime) ,(variable-not-in (term ((FreeLocVars e_2) (FreeLocVars v)))))]
+   (where (P_prime) ,(variable-not-in (term ((FreeLocs e_2) (FreeLocs v)))))]
   )
 
 (define-judgment-form L3
@@ -311,11 +346,11 @@
   [(type-alpha-eq? T_1 T_2)
    -------------------
    (type-alpha-eq? (Cap L T_1) (Cap L T_2))]
-  [(where P_3 ,(variable-not-in (term ((FreeLocVars T_1) (FreeLocVars T_2)))))
+  [(where P_3 ,(variable-not-in (term ((FreeLocs T_1) (FreeLocs T_2)))))
    (type-alpha-eq? (substp T_1 P_1 P_3) (substp T_2 P_2 P_3))
    -------------------
    (type-alpha-eq? (∀ P_1 T_1) (∀ P_2 T_2))]
-  [(where P_3 ,(variable-not-in (term ((FreeLocVars T_1) (FreeLocVars T_2)))))
+  [(where P_3 ,(variable-not-in (term ((FreeLocs T_1) (FreeLocs T_2)))))
    (type-alpha-eq? (substp T_1 P_1 P_3) (substp T_2 P_2 P_3))
    -------------------
    (type-alpha-eq? (∃ P_1 T_1) (∃ P_2 T_2))])
@@ -380,7 +415,7 @@
    (alpha-eq? e_13 e_23)
    -------------------
    (alpha-eq? (swap e_11 e_12 e_13) (swap e_21 e_22 e_23))]
-  [(where P_3 ,(variable-not-in (term ((FreeLocVars e_1) (FreeLocVars e_2))) (term P_1)))
+  [(where P_3 ,(variable-not-in (term ((FreeLocs e_1) (FreeLocs e_2))) (term P_1)))
    (alpha-eq? (substp e_1 P_1 P_3) (substp e_2 P_2 P_3))
    -------------------
    (alpha-eq? (Λ P_1 e_1) (Λ P_2 e_2))]
@@ -391,23 +426,37 @@
    -------------------
    (alpha-eq? (loc // e_1) (loc // e_2))]
   [(where X_3 ,(variable-not-in (term ((FreeVars e_12) (FreeVars e_22))) (term X_1)))
-   (where P_3 ,(variable-not-in (term ((FreeLocVars e_12) (FreeLocVars e_22))) (term P_1)))
+   (where P_3 ,(variable-not-in (term ((FreeLocs e_12) (FreeLocs e_22))) (term P_1)))
    (alpha-eq? e_11 e_21)
    (alpha-eq? (subst (substp e_12 P_1 P_3) X_1 X_3) (subst (substp e_22 P_2 P_3) X_2 X_3))
    -------------------
    (alpha-eq? (let (P_1 // X_1) = e_11 in e_12) (let (P_2 // X_2) = e_21 in e_22))])
 
-(module+ test
-  ;alpha-eq?
-  (test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in y))) #t)
-  (test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in x))) #f)
-  (test-equal (judgment-holds (alpha-eq? (let (! x) = (λ (y I) y) in x) (let (! y) = (λ (z I) z) in y))) #t)
-  
-  ;substp
-  (test-equal (term (substp ((Λ p (ptr l_0)) p) p l)) (term ((Λ p (ptr l_0)) l)))
-  
-  
-  )
+; in order to compare store/expression pairs, I think we are going to have to assume that
+; the ith entry of the heap in pair A corresponds to the ith entry of the heap in pair B,
+; and then rename the locations of one of the pairs so that the location names match
+;(define-judgment-form L3
+;  #:mode (alpha-eq-state? I I)
+;  #:contract (alpha-eq-state? (store e) (store e))
+;  [
+;   -------------------
+;   (alpha-eq-state? (((l_0 v_0) (l_rest0 v_rest0) ...) e_0) 
+;                    (((l_front1 v_front1) ... (l_1 v_1) (l_back1 v_back1) ...) e_1)) 
+;   
+;  
+
+
+;(module+ test
+;  ;alpha-eq?
+;  (test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in y))) #t)
+;  (test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in x))) #f)
+;  (test-equal (judgment-holds (alpha-eq? (let (! x) = (λ (y I) y) in x) (let (! y) = (λ (z I) z) in y))) #t)
+;  
+;  ;substp
+;  (test-equal (term (substp ((Λ p (ptr l_0)) p) p l)) (term ((Λ p (ptr l_0)) l)))
+;  
+;  
+;  )
 
 (define ->L3 
   (reduction-relation 
@@ -462,11 +511,12 @@
   (define f (term (Λ p
     
              (λ (x_c1  (Cap p I)) 
-                    (λ (x_ptrs ((! (Ptr p)) ⊗ (! (Ptr p)))) 
+                    (λ (x_xyptrs ((! (Ptr p)) ⊗ (! (Ptr p)))) 
                       (λ (x_v (I -o I)) 
-                        (let (x / y) = x_ptrs in
-                          (let (x_c2 / z) = (swap x_c1 x x_v) in
-                            (x_c2 / (y / z))))))))))
+                        (let (x / y) = x_xyptrs in
+                          (let (! x_xptr) = x in
+                          (let (x_c2 / z) = (swap x_c1 x_xptr x_v) in
+                            (x_c2 / (y / z)))))))))))
 
   
   (define prg1 (term 
@@ -475,18 +525,153 @@
                     ((((,f p) x_cap) (dupl x_ptr)) (λ (x I) *))))))
   
    
-(module+ test
+;(module+ test
+;  ;(test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in x))) #f)
+;  (test-equal (term ,(apply-reduction-relation* ->L3 (term (() ,prg1))))
+;              (term ((((l_1 (λ (x I) *))) (cap / ((! (ptr l_1)) / *))))))
+;  
+;  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in *))))
+;  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in (let (x_cap / x_single_ptr) = x_cptr in *)))))
+;  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in (let (x_cap / x_single_ptr) = x_cptr in (,f p))))))
+;  (check-equal? (apply-reduction-relation ->L3 (term (() (let * = * in *)))) (term ((() *))))
+;  (check-equal? (apply-reduction-relation ->L3 (term (() (let * = * in (let * = * in *))))) (term ((() (let * = * in *))))))
+;   
 
-  (check-equal? (apply-reduction-relation* ->L3 
-                                           (term (() ,prg1)))
-                                          (term ((((l_1 (λ (X I) *))) (cap / ((! (ptr l_1)) / I))))))
+
+; another approach to accomplishing this would be to use a judgment form
+; this is more efficient, and seems just as readable, if not more so
+(define-metafunction L3
+  loc-subset : (loc ...) (loc ...) -> boolean
+  [(loc-subset (loc_1 ...) (loc_2 ...)) #t
+   (where #t ,(subset? (apply set (term (loc_1 ...))) (apply set (term (loc_2 ...)))))]
+  [(loc-subset (loc_1 ...) (loc_2 ...)) #f])
+
+;;;THIS WAS A FLAWED IDEA
+;;NOTE: this could be done entirely with pattern matching: ((X_0 T_0) ...) ((X_0 T_0) ... (X_1 T_1) (X_2 T_2) (X_3 T_3) ...)
+;;the first argument is a type environment directly after 2 bindings were introduced
+;;the second argument some legal output type environment for the binding form
+;;more concretely, the second argument is a prefix of the first argument which is at 
+;;least two entries shorter
+;(define-judgement-form L3
+;  #:mode (geq2-bindings-removed I I)
+;  #:contract (geq2-bindings-removed type-env type-env)
+;  [(geq2-bindings-removed ((X_0 T_0) ...) ((X_1 T_1) ...)) 
+;   ------------------- (Peel)
+;   (geq2-bindings-removed ((X T) (X_0 T_0) ...) ((X T) (X_1 T_1) ...))]
+;  
+;  [------------------- (Base)
+;   (geq2-bindings-removed ((X_0 T_0) (X_1 T_1) (X_2 T_2) ...) ())])
+;
+;;the first argument is a type environment directly after 1 binding was introduced
+;;the second argument some legal output type environment for the binding form
+;;more concretely, the second argument is a prefix of the first argument which is at 
+;;least one entry shorter
+;(define-judgement-form L3
+;  #:mode (geq1-binding-removed I I)
+;  #:contract (geq1-binding-removed type-env type-env)
+;  [(geq1-binding-removed ((X_0 T_0) ...) ((X_1 T_1) ...)) 
+;   ------------------- (Peel)
+;   (geq1-binding-removed ((X T) (X_0 T_0) ...) ((X T) (X_1 T_1) ...))]
+;  [------------------- (Base)
+;   (geq1-binding-removed ((X_0 T_0) (X_1 T_1) ...) ())])
   
-  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in *))))
-  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in (let (x_cap / x_single_ptr) = x_cptr in *)))))
-  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in (let (x_cap / x_single_ptr) = x_cptr in (,f p))))))
-  (check-equal? (apply-reduction-relation ->L3 (term (() (let * = * in *)))) (term ((() *))))
-  (check-equal? (apply-reduction-relation ->L3 (term (() (let * = * in (let * = * in *))))) (term ((() (let * = * in *))))))
-   
+;TODO: add g1 binding removed judgement
+                         
+(define-judgment-form L3
+  #:mode (L3-type I I I O O)
+  #:contract (L3-type loc-env type-env e T type-env)
+  [------------------- Unit
+   (L3-type loc-env type-env * I type-env)]
+  
+  [(where #t (loc-subset (type-FreeLocs T) loc-env))
+   (where #f ,(member (term X) (term (X_1 ...))))
+   ------------------- Var
+   (L3-type loc-env ((U_0 X_0 T_0) ... (♭ X T) (U_1 X_1 T_1) ...) X T ((U_0 X_0 T_0) ... (♯ X T) (U_1 X_1 T_1) ...))]
+  
+  [(L3-type loc-env ((U_env1 X_env1 T_env1) ... (♭ X T_1)) e T_2 ((U_env2 X_env2 T_env2) ... (♯ X T_1)))
+   ------------------- Fun
+   (L3-type loc-env ((U_env1 X_env1 T_env1) ...) (λ (X T_1) e) (T_1 -o T_2) ((U_env2 X_env2 T_env2) ...))]
+  
+  [(L3-type loc-env type-env_1 e_1 (T_1 -o T_2) type-env_2)
+   (L3-type loc-env type-env_2 e_2 T_1 type-env_3)
+   ------------------- App
+   (L3-type loc-env type-env_1 (e_1 e_2) T_2 type-env_3)]                    
+  
+  [(L3-type loc-env type-env_1 e_1 I type-env_2)
+   (L3-type loc-env type-env_2 e_2 T type-env_3)
+   ------------------- Let-Unit
+   (L3-type loc-env type-env_1 (let * = e_1 in e_2) T type-env_3)]                     
+
+  [(L3-type loc-env type-env_1 e_1 T_1 type-env_2)
+   (L3-type loc-env type-env_2 e_2 T_2 type-env_3)
+   ------------------- Pair
+   (L3-type loc-env type-env_1 (e_1 / e_2) (T_1 ⊗ T_2) type-env_3)]
+  
+  [(L3-type loc-env type-env_1 e_1 (T_11 ⊗ T_12) ((U_env2 X_env2 T_env2) ...))
+   (L3-type loc-env ((U_env2 X_env2 T_env2) ... (♭ X_1 T_11) (♭ X_2 T_12)) e_2 T ((U_env3 X_env3 T_env3) ... (♯ X_1 T_11) (♯ X_2 T_12)))
+   ------------------- Let-Pair
+   (L3-type loc-env type-env_1 (let (X_1 / X_2) = e_1 in e_2) T ((U_env3 X_env3 T_env3) ...))]
+                       
+        
+  
+  )
+  
+(module+ test
+  (require rackunit)
+  
+  ; --- L3-type Unit ---
+  
+  (check-true (judgment-holds (L3-type (p1 p2) () * I ())))
+  ; L3's linear type system does not allow unused entries in the type environment
+  (check-false (judgment-holds (L3-type (p1) ((♭ x I)) * I (♭ x I))))
+  
+  ; --- L3-type Var
+  (check-true (judgment-holds (L3-type () ((♭ x I)) x I ((♯ x I)))))
+  ; x is removed from the type environment because this is a linear type system
+  (check-false (judgment-holds (L3-type (p1 p2 p3) ((♭ x I)) x I ((♭ x I)))))
+  ; type references location variable not in location environment
+  (check-false (judgment-holds (L3-type (p1 p2 p3) ((♭ x (Ptr p4))) x (Ptr p4) ((♯ x (Ptr p4))))))
+  ; adding p4 to location environment fixes this
+  (check-true (judgment-holds (L3-type (p1 p2 p3 p4) ((♭ x (Ptr p4))) x (Ptr p4) ((♯ x (Ptr p4))))))
+  
+  ; --- L3-type Fun
+  (check-true (judgment-holds (L3-type () ((♯ x I)) (λ (y (I ⊗ I)) y) ((I ⊗ I) -o (I ⊗ I)) ((♯ x I)))))
+  (check-true (judgment-holds (L3-type () ((♯ x I)) (λ (x (I ⊗ I)) x) ((I ⊗ I) -o (I ⊗ I)) ((♯ x I)))))
+  (check-true (judgment-holds (L3-type () ((♭ x I)) (λ (x (I ⊗ I)) x) ((I ⊗ I) -o (I ⊗ I)) ((♭ x I)))))
+  ; the argument x is not used, so typechecking fails. all variables are linear and therefore must be used.
+  (check-false (judgment-holds (L3-type () ((♯ x I)) (λ (x (I ⊗ I)) *) ((I ⊗ I) -o (I ⊗ I)) ((♯ x I)))))
+  
+  ; --- L3-type App
+  (check-true (judgment-holds (L3-type () ((♭ x I)) ((λ (y I) y) x) I ((♯ x I)))))
+  
+  
+  ; --- L3-type Let-Unit ---
+  (check-true (judgment-holds (L3-type (p1) ((♭ x I)) (let * = x in *) I ((♯ x I)))))
+  ;x cannot be used twice due to linearity
+  (check-false (judgment-holds (L3-type (p1) ((♭ x I)) (let * = x in x) I ((♯ x I)))))
+  ;x cannot be used because its most recent binding has been used
+  (check-false (judgment-holds (L3-type (p1) ((♭ x I) (♯ x I)) (let * = x in *) I ((♯ x I) (♯ x I)))))
+  (check-true (judgment-holds (L3-type (p1) ((♭ x I) (♭ x I)) (let * = x in *) I ((♭ x I) (♯ x I)))))
+  (check-true (judgment-holds (L3-type (p1) ((♭ x I) (♭ y I)) (let * = x in y) I ((♯ x I) (♯ y I)))))
+  
+  ;we can use two separate variables
+  (check-true (judgment-holds (L3-type (p1) ((♭ x I) (♭ y I)) (let * = x in *) I ((♯ x I) (♭ y I)))))
+  (check-true (judgment-holds (L3-type (p1) ((♭ x I) (♭ y (I -o I))) (let * = x in y) (I -o I) ((♯ x I) (♯ y (I -o I))))))
+  
+  ; --- L3-type Pair ---
+  (check-true (judgment-holds (L3-type (p1) ((♭ x I) (♭ y (Ptr p1))) (x / y) (I ⊗ (Ptr p1)) ((♯ x I) (♯ y (Ptr p1))))))
+  ; cannot use x after its most recent binding has already been used
+  (check-false (judgment-holds (L3-type (p1) ((♭ x I) (♭ x (Ptr p1))) (x / x) (I ⊗ (Ptr p1)) ((♯ x I) (♯ x (Ptr p1))))))
+  
+  ; --- L3-type Let-Pair ---
+  (check-true (judgment-holds (L3-type () ((♭ x I)) (let (x / y) = (* / *) in (let * = x in y)) I ((♭ x I)))))
+  
+  )
+
+  
+  
+
+
 
    ;(-->
    ; (store (let (x_1 / x_2) = (v_1 / v_2) in e))
