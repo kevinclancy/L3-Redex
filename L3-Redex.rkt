@@ -576,7 +576,31 @@
 ;   (geq1-binding-removed ((X_0 T_0) (X_1 T_1) ...) ())])
   
 ;TODO: add g1 binding removed judgement
-                         
+
+
+; the first argument is the input type environment for type checking a term
+; the second argument is the output type environment from type checking the term
+; this function returns a list of all type environment entries which were
+; used while typechecking the term; of course, they should all be prefixed by ♯
+(define-metafunction L3
+  used-tenv-entries : type-env type-env -> type-env
+  [(used-tenv-entries ((♭ X T) (U_1 X_1 T_1) ...) ((♯ X T) (U_2 X_2 T_2) ...)) 
+   ((♯ X T) type-env_rest ...)
+   (where (type-env_rest ...) (used-tenv-entries ((U_1 X_1 T_1) ...) ((U_2 X_2 T_2) ...)))]
+  [(used-tenv-entries ((♭ X T) (U_1 X_1 T_1) ...) ((♭ X T) (U_2 X_2 T_2) ...)) 
+   (used-tenv-entries ((U_1 X_1 T_1) ...) ((U_2 X_2 T_2) ...))]
+  [(used-tenv-entries ((♯ X T) (U_1 X_1 T_1) ...) ((♯ X T) (U_2 X_2 T_2) ...)) 
+   (used-tenv-entries ((U_1 X_1 T_1) ...) ((U_2 X_2 T_2) ...))]
+  [(used-tenv-entries () ()) ()])  
+
+; do all variables in the type environment have ! types?
+(define-metafunction L3
+  tenv-unrestricted : type-env -> boolean
+  [(tenv-unrestricted ()) #t]
+  [(tenv-unrestricted ((U X (! T)) (U_1 X_1 T_1) ...))
+   (tenv-unrestricted ((U_1 X_1 T_1) ...))]
+  [(tenv-unrestricted type-env) #f]) 
+  
 (define-judgment-form L3
   #:mode (L3-type I I I O O)
   #:contract (L3-type loc-env type-env e T type-env)
@@ -607,13 +631,39 @@
    ------------------- Pair
    (L3-type loc-env type-env_1 (e_1 / e_2) (T_1 ⊗ T_2) type-env_3)]
   
+  [(L3-type loc-env type-env_1 v T type-env_2)
+   (where #t (tenv-unrestricted (used-tenv-entries type-env_1 type-env_2)))
+   ------------------- Bang
+  (L3-type loc-env type-env_1 (! v) (! T) type-env_2)]
+  
+  [(L3-type loc-env type-env_1 e_1 (! T_1) ((U_env2 X_env2 T_env2) ...))
+   (L3-type loc-env ((U_env2 X_env2 T_env2) ... (♭ X T_1)) e_2 T_2 ((U_env3 X_env3 T_env3) ... (♯ X T_1)))
+   ------------------- Let-Bang
+   (L3-type loc-env type-env_1 (let (! X) = e_1 in e_2) T_2 ((U_env3 X_env3 T_env3) ...))]
+  
+  [(L3-type loc-env type-env_1 e (! T) type-env_2) 
+   ------------------- Dupl
+   (L3-type loc-env type-env_1 (dupl e) ( (! T) ⊗ (! T) ) type-env_2)]
+  
+  [(L3-type loc-env type-env_1 e (! T) type-env_2)
+   ------------------- Drop
+   (L3-type loc-env type-env_1 (drop e) I type-env_2)]
+  
+  [(L3-type loc-env type-env_1 e T type-env_2)
+   (where P ,(variable-not-in (term (FreeLocs T)) (term p))) 
+   ------------------- New
+   (L3-type loc-env type-env_1 (new e) (∃ P ( (Cap P T) ⊗ (! (Ptr P)) ) ) type-env_2)]
+  
+  [(L3-type loc-env type-env_1 e (∃ P ( (Cap P T) ⊗ (! (Ptr P)) ) ) type-env_2)
+   ------------------- Free
+   (L3-type loc-env type-env_1 (free e) (∃ P T) type-env_2)]
+  
   [(L3-type loc-env type-env_1 e_1 (T_11 ⊗ T_12) ((U_env2 X_env2 T_env2) ...))
    (L3-type loc-env ((U_env2 X_env2 T_env2) ... (♭ X_1 T_11) (♭ X_2 T_12)) e_2 T ((U_env3 X_env3 T_env3) ... (♯ X_1 T_11) (♯ X_2 T_12)))
    ------------------- Let-Pair
    (L3-type loc-env type-env_1 (let (X_1 / X_2) = e_1 in e_2) T ((U_env3 X_env3 T_env3) ...))]
                        
-        
-  
+
   )
   
 (module+ test
@@ -665,6 +715,12 @@
   
   ; --- L3-type Let-Pair ---
   (check-true (judgment-holds (L3-type () ((♭ x I)) (let (x / y) = (* / *) in (let * = x in y)) I ((♭ x I)))))
+  
+  ; --- L3-type Bang ---
+  (check-true (judgment-holds (L3-type () ((♭ x (! I))) x (! I) ((♯ x (! I))))))
+  (check-true (judgment-holds (L3-type () ((♭ x (! I))) (! (λ (y I) (let * = y in x))) (! (I -o (! I))) ((♯ x (! I))))))
+  ; unrestricted values cannot contain linear values
+  (check-false (judgment-holds (L3-type () ((♭ x I)) (! (λ (y I) (let * = y in x))) (! (I -o I)) ((♯ x I)))))
   
   )
 
