@@ -160,8 +160,8 @@
   [(type-FL (loc_env ...) (Cap loc T)) 
    (loc loc_T ...)
    (where (loc_T ...) (type-FL (loc loc_env ...) T))]
-  [(type-FL (loc_env ...) (∀ P T)) (type-FL (loc loc_env ...) T)]
-  [(type-FL (loc_env ...) (∃ P T)) (type-FL (loc loc_env ...) T)])
+  [(type-FL (loc_env ...) (∀ P T)) (type-FL (P loc_env ...) T)]
+  [(type-FL (loc_env ...) (∃ P T)) (type-FL (P loc_env ...) T)])
   
 (define-metafunction L3
   type-FreeLocs : T -> (loc ...)
@@ -619,7 +619,7 @@
   [(L3-type loc-env type-env_1 e_1 (T_1 -o T_2) type-env_2)
    (L3-type loc-env type-env_2 e_2 T_1 type-env_3)
    ------------------- App
-   (L3-type loc-env type-env_1 (e_1 e_2) T_2 type-env_3)]                    
+   (L3-type loc-env type-env_1 (e_1 e_2) T_2 type-env_3)]
   
   [(L3-type loc-env type-env_1 e_1 I type-env_2)
    (L3-type loc-env type-env_2 e_2 T type-env_3)
@@ -641,7 +641,7 @@
    ------------------- Let-Bang
    (L3-type loc-env type-env_1 (let (! X) = e_1 in e_2) T_2 ((U_env3 X_env3 T_env3) ...))]
   
-  [(L3-type loc-env type-env_1 e (! T) type-env_2) 
+  [(L3-type loc-env type-env_1 e (! T) type-env_2)
    ------------------- Dupl
    (L3-type loc-env type-env_1 (dupl e) ( (! T) ⊗ (! T) ) type-env_2)]
   
@@ -650,7 +650,7 @@
    (L3-type loc-env type-env_1 (drop e) I type-env_2)]
   
   [(L3-type loc-env type-env_1 e T type-env_2)
-   (where P ,(variable-not-in (term (FreeLocs T)) (term p))) 
+   (where P ,(variable-not-in (term (type-FreeLocs T)) (term p))) 
    ------------------- New
    (L3-type loc-env type-env_1 (new e) (∃ P ( (Cap P T) ⊗ (! (Ptr P)) ) ) type-env_2)]
   
@@ -658,12 +658,34 @@
    ------------------- Free
    (L3-type loc-env type-env_1 (free e) (∃ P T) type-env_2)]
   
+  [(L3-type loc-env type-env_1 e_1 (Cap P T_1) type-env_2)
+   (L3-type loc-env type-env_2 e_2 (Ptr P) type-env_3)
+   (L3-type loc-env type-env_3 e_3 T_3 type-env_4)
+   ------------------- Swap
+   (L3-type loc-env type-env_1 (swap e_1 e_2 e_3) ((Cap P T_3) ⊗ T_1) type-env_4)]
+  
+  [(L3-type (loc_env ... P) type-env_1 e T type-env_2)
+   ------------------- LFun
+   (L3-type (loc_env ...) type-env_1 (Λ P e) (∀ P T) type-env_2)]
+  
+  [(L3-type (loc_env1 ... loc_1 loc_env2 ...) type-env_1 e (∀ P_2 T) type-env_2)
+   ------------------- LApp
+   (L3-type (loc_env1 ... loc_1 loc_env2 ...) type-env_1 (e loc_1) (type-substp T P_2 loc_1) type-env_2)]
+  
+  [(L3-type (loc loc_env1 ...) type-env_1 e (type-substp T P loc) type-env_2)
+   ------------------- LPack
+   (L3-type (loc loc_env1 ...) type-env_1 (loc // e) (∃ P T) type-env_2)]
+  
+  [(L3-type (loc_env ...) type-env_1 e_1 (∃ P T_1) type-env_2)
+   (L3-type (loc_env ... P) type-env_2 e_2 T_2 type-env_3) 
+   (where #t (loc-subset (type-FreeLocs T_1) (loc_env ...)))
+   ------------------- Let-LPack
+   (L3-type (loc_env ...) type-env_1 (let (P // x) = e_1 in e_2) T_2 type-env_3)]
+  
   [(L3-type loc-env type-env_1 e_1 (T_11 ⊗ T_12) ((U_env2 X_env2 T_env2) ...))
    (L3-type loc-env ((U_env2 X_env2 T_env2) ... (♭ X_1 T_11) (♭ X_2 T_12)) e_2 T ((U_env3 X_env3 T_env3) ... (♯ X_1 T_11) (♯ X_2 T_12)))
    ------------------- Let-Pair
-   (L3-type loc-env type-env_1 (let (X_1 / X_2) = e_1 in e_2) T ((U_env3 X_env3 T_env3) ...))]
-                       
-
+   (L3-type loc-env type-env_1 (let (X_1 / X_2) = e_1 in e_2) T ((U_env3 X_env3 T_env3) ...))]                     
   )
   
 (module+ test
@@ -721,6 +743,32 @@
   (check-true (judgment-holds (L3-type () ((♭ x (! I))) (! (λ (y I) (let * = y in x))) (! (I -o (! I))) ((♯ x (! I))))))
   ; unrestricted values cannot contain linear values
   (check-false (judgment-holds (L3-type () ((♭ x I)) (! (λ (y I) (let * = y in x))) (! (I -o I)) ((♯ x I)))))
+
+  ; --- L3-type Dupl
+  (check-true (judgment-holds (L3-type () () (dupl (! *)) ( (! I) ⊗ (! I) ) ())))
+  (check-true (judgment-holds (L3-type () ((♭ x (! I))) (dupl x) ( (! I) ⊗ (! I) ) ((♯ x (! I))))))
+  ;we are prohibited from duplicating linear values
+  (check-false (judgment-holds (L3-type () ((♭ x I)) (dupl x) (I ⊗ I) ((♯ x I)))))
+  
+  ; --- L3-type Drop
+  ;we are prohibited from dropping linear values
+  (check-false (judgment-holds (L3-type () () (drop *) I ())))
+  (check-true (judgment-holds (L3-type () () (drop (! *)) I ())))
+  (check-true (judgment-holds (L3-type () ((♭ z (! (∀ p (Ptr p))))) (drop z) I ((♯ z (! (∀ p (Ptr p))))))))
+  (check-true (judgment-holds (L3-type () ((♭ z (! (∃ p (Ptr p))))) (drop z) I ((♯ z (! (∃ p (Ptr p))))))))
+  
+  ; --- L3-type New
+  (check-true (judgment-holds (L3-type () () (new *) (∃ p ( (Cap p I) ⊗ (! (Ptr p)) )) ())))
+  (check-true (judgment-holds (L3-type () () (new (Λ p (λ (x (Ptr p)) x))) (∃ p ( (Cap p (∀ p ((Ptr p) -o (Ptr p)))) ⊗ (! (Ptr p)) )) ())))
+  
+  ; --- L3-type Let-Bang
+  (check-true (judgment-holds (L3-type () ((♭ x I)) (let (! x) = (! *) in x) I ((♭ x I)))))
+  ; x has been stripped of its linearity inside let body, so we shouldn't be able to duplicate it
+  (check-false (judgment-holds (L3-type () ((♭ y (! I))) (let (! x) = y in (dupl x)) ( (! I) ⊗ (! I) ) ((♯ y (! I))))))
+  
+  
+  ; Mixed feature tests
+  (check-true (judgment-holds (L3-type () () (let (! x) = (! (λ (x I) x)) in (x *)) I ())))
   
   )
 
