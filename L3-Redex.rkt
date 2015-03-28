@@ -30,7 +30,6 @@
      (L // E)
      (let (P // X) = E in e)))
 
-
 (define ->L3 
   (reduction-relation 
    L3-rr 
@@ -105,27 +104,15 @@
   
    
 (module+ test
+  (test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in x))) #f)
+  (test-equal (term ,(apply-reduction-relation* ->L3 (term (() ,prg1))))
+              (term ((((l_1 (λ (x I) *))) (cap / ((! (ptr l_1)) / *))))))
   
- ; (test-equal (term ,(apply-reduction-relation* ->L3 (term (() ,prg1))))
- ;             (term ((((l_1 (λ (x I) *))) (cap / ((! (ptr l_1)) / *))))))
-  
-  (check-not-false (redex-match L3 e 
-                   (term (let (p // x_cptr) = (new *) in *))))
-
-  (check-not-false (redex-match L3 e 
-                   (term (let (p // x_cptr) = (new *) in 
-                      (let (x_cap / x_single_ptr) = x_cptr in *)))))
-
-  (check-not-false (redex-match L3 e 
-                   (term (let (p // x_cptr) = (new *) in 
-                   (let (x_cap / x_single_ptr) = x_cptr in (,f p))))))
-
-  (check-equal? (apply-reduction-relation ->L3 
-                (term (() (let * = * in *)))) (term ((() *))))
-  (check-equal? (apply-reduction-relation ->L3 
-                (term (() (let * = * in (let * = * in *))))) 
-                (term ((() (let * = * in *))))))   
-
+  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in *))))
+  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in (let (x_cap / x_single_ptr) = x_cptr in *)))))
+  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in (let (x_cap / x_single_ptr) = x_cptr in (,f p))))))
+  (check-equal? (apply-reduction-relation ->L3 (term (() (let * = * in *)))) (term ((() *))))
+  (check-equal? (apply-reduction-relation ->L3 (term (() (let * = * in (let * = * in *))))) (term ((() (let * = * in *))))))
 
 
 (define-extended-language L3-types L3 
@@ -140,14 +127,11 @@
 
 ; another approach to accomplishing this would be to use a judgment form
 ; this is more efficient, and seems just as readable, if not more so
-(define-metafunction L3-types
-  loc-subset : (P ...) (P ...) -> boolean
-  [(loc-subset (P_1 ...) (P_2 ...)) #t
-   (side-condition (subset? (apply set (term (P_1 ...))) 
-                            (apply set (term (P_2 ...)))))]
-  [(loc-subset (P_1 ...) (P_2 ...)) #f])
-
-
+(define-metafunction L3
+  loc-subset : (loc ...) (loc ...) -> boolean
+  [(loc-subset (loc_1 ...) (loc_2 ...)) #t
+   (where #t ,(subset? (apply set (term (loc_1 ...))) (apply set (term (loc_2 ...)))))]
+  [(loc-subset (loc_1 ...) (loc_2 ...)) #f])
 
 ; the first argument is the input type environment for type checking a term
 ; the second argument is the output type environment from type checking the 
@@ -267,24 +251,28 @@
             ((Cap P T_3) ⊗ T_1) 
             type-env_4)]
   
-  [(L3-type (loc_env ... P) type-env_1 e T type-env_2)
+  [(L3-type (P_env ... P) type-env_1 e T type-env_2)
    ------------------------------------------------------------------- LFun
-   (L3-type (loc_env ...) type-env_1 (Λ P e) (∀ P T) type-env_2)]
+   (L3-type (P_env ...) type-env_1 (Λ P e) (∀ P T) type-env_2)]
   
-  [(L3-type (loc_env1 ... loc_1 loc_env2 ...) type-env_1 e 
+  [(L3-type (P_env1 ... loc_1 P_env2 ...) type-env_1 e 
             (∀ P_2 T) 
             type-env_2)
    ------------------------------------------------------------------- LApp
-   (L3-type (loc_env1 ... loc_1 loc_env2 ...) type-env_1 (e loc_1) 
+   (L3-type (P_env1 ... loc_1 P_env2 ...) type-env_1 (e loc_1) 
             (type-substp T P_2 loc_1) 
             type-env_2)]
   
-  [(L3-type (P_0 loc_env1 ...) type-env_1 e 
-            T ;(type-substp T P_1 P_0) 
+  [; there is no defined strategy for choosing rho/p in the L3 paper
+   ; we need a deterministic strategy that is statically predicatable. 
+   ; while this static predicatability isn't necessary for programming 
+   ; due to Let-LPack, it is useful for testing
+   (L3-type (P_env1 ... P P_env2 ...) type-env_1 e 
+            T 
             type-env_2)
    ------------------------------------------------------------------- LPack
-   (L3-type (P_0 loc_env1 ...) type-env_1 (P_0 // e) 
-            (∃ P_0 T) 
+   (L3-type (P_env1 ... P P_env2 ...) type-env_1 (P // e) 
+            (∃ P T) 
             type-env_2)]
   
   [(L3-type (loc_env ...) type-env_1 e_1 
@@ -354,13 +342,22 @@
   ;; All variables are linear and therefore must be used.
   (check-false (judgment-holds (L3-type () ((♯ x I)) (λ (x (I ⊗ I)) *) 
                                         ((I ⊗ I) -o (I ⊗ I)) ((♯ x I)))))
-  
 
   ;; --- L3-type App ---
 
   (check-true (judgment-holds (L3-type () ((♭ x I)) ((λ (y I) y) x) 
                                        I ((♯ x I)))))
   
+
+  ; --- L3-type Let-Unit ---
+  (check-true (judgment-holds (L3-type (p1) ((♭ x I)) (let * = x in *) I ((♯ x I)))))
+  ;x cannot be used twice due to linearity
+  (check-false (judgment-holds (L3-type (p1) ((♭ x I)) (let * = x in x) I ((♯ x I)))))
+  ;x cannot be used because its most recent binding has been used
+  (check-false (judgment-holds (L3-type (p1) ((♭ x I) (♯ x I)) (let * = x in *) I ((♯ x I) (♯ x I)))))
+  (check-true (judgment-holds (L3-type (p1) ((♭ x I) (♭ x I)) (let * = x in *) I ((♭ x I) (♯ x I)))))
+  (check-true (judgment-holds (L3-type (p1) ((♭ x I) (♭ y I)) (let * = x in y) I ((♯ x I) (♯ y I)))))
+
   
   ;; --- L3-type Let-Unit ---  
   (check-true (judgment-holds (L3-type (p1) ((♭ x I)) (let * = x in *) 
@@ -452,6 +449,44 @@
   (check-true (judgment-holds 
                (L3-type () ((♭ z (! (∃ p (Ptr p))))) (drop z) 
                         I ((♯ z (! (∃ p (Ptr p))))))))
+  ; --- L3-type Free
+  (check-true (judgment-holds (L3-type () () (free (new *)) (∃ p I) ())))
+  (check-true (judgment-holds (L3-type () ((♭ x (∃ p ((Cap p I) ⊗ (! (Ptr p)))))) (free x) (∃ p I) ((♯ x (∃ p ((Cap p I) ⊗ (! (Ptr p)))))))))
+  
+  ; --- L3-type Swap
+  (check-true (judgment-holds (L3-type (p) ((♭ x-cap (Cap p I)) (♭ x-ptr (Ptr p))) (swap x-cap x-ptr (λ (x I) x)) ((Cap p (I -o I)) ⊗ I) ((♯ x-cap (Cap p I)) (♯ x-ptr (Ptr p)))))) 
+
+  ; --- L3-type Let-Bang
+  (check-true (judgment-holds (L3-type () ((♭ x I)) (let (! x) = (! *) in x) I ((♭ x I)))))
+  ; x has been stripped of its linearity inside let body, so we shouldn't be able to duplicate it
+  (check-false (judgment-holds (L3-type () ((♭ y (! I))) (let (! x) = y in (dupl x)) ( (! I) ⊗ (! I) ) ((♯ y (! I))))))
+    
+  ; Mixed feature tests
+  (check-true (judgment-holds (L3-type () () (let (! x) = (! (λ (x I) x)) in (x *)) I ())))
+  (check-true (judgment-holds (L3-type () () (let (p // x-cap-ptr) = (new *) in (p // x-cap-ptr)) 
+                                             (∃ p ( (Cap p I) ⊗ (! (Ptr p) ) ) ) ())))
+  
+  (check-true (judgment-holds (L3-type () () (let (p // x-cap-ptr) = (new *) in 
+                                             (let (x-cap / x-bang-ptr) = x-cap-ptr in 
+                                             (let * = (drop x-bang-ptr) in
+                                             (p // x-cap))))
+                                       (∃ p (Cap p I) ) ())))
+  
+  (check-true (judgment-holds (L3-type () () (let (p // x-cap-ptr) = (new *) in 
+                                             (let (x-cap / x-bang-ptr) = x-cap-ptr in 
+                                             (let (! x-ptr) = x-bang-ptr in 
+                                             (let (x / y) = (swap x-cap x-ptr (λ (x I) x)) in 
+                                             (let * = y in (p // x))))))
+                                       (∃ p (Cap p (I -o I) ) ) ())))
+
+  ; p cannot be a free variable in the type of the body of the lpack binding
+  (check-false (judgment-holds (L3-type () () (let (p // x-cap-ptr) = (new *) in 
+                                             (let (x-cap / x-bang-ptr) = x-cap-ptr in 
+                                             (let (! x-ptr) = x-bang-ptr in 
+                                             (let (x / y) = (swap x-cap x-ptr (λ (x I) x)) in 
+                                             (let * = y in x)))))
+                                       (Cap p (I -o I)) ())))
+  
   
 
   ;; --- L3-type New ---

@@ -2,7 +2,7 @@
 
 (require redex "l3-lang.rkt" "l3-subst-type.rkt")
 
-(provide FV FLV subst substp)
+(provide FV FLV subst substp alpha-eq?)
 
 ;; -----------------------------------------------------------------------------
 ;; Auxiliary functions
@@ -392,7 +392,7 @@
    (FLV-value (P_env ...) e)]
   [(FLV-value (P_env ...) (! v)) 
    (FLV-value (P_env ...) v)]
-  [(FLV-value (P_env ...) (prt L)) ()]
+  [(FLV-value (P_env ...) (ptr L)) ()]
   [(FLV-value (P_env ...) (cap)) ()]
   [(FLV-value (P_env ...) (Λ P e)) 
    (FLV-value (P P_env ...) e)]
@@ -430,7 +430,7 @@
    (where (P_fl1 ...) (FLV-acc (P_env ...) e_1))
    (where (P_fl2 ...) (FLV-acc (P_env ...) e_2))]
   [(FLV-acc (P_env ...) X) ()]  
-  [(FLV-acc (P_env ...) (! v)) (FLV-value (P_env...) v)]
+  [(FLV-acc (P_env ...) (! v)) (FLV-value (P_env ...) v)]
   [(FLV-acc (P_env ...) (let (! X) = e_1 in e_2))
    (P_fl1 ... P_fl2 ...) 
    (where (P_fl1 ...) (FLV-acc (P_env ...) e_1))
@@ -442,7 +442,7 @@
   [(FLV-acc (P_env ...) (new e)) 
    (FLV-acc (P_env ...) e)] 
   [(FLV-acc (P_env ...) (free e)) 
-   (FLV-acc (P_env...) e)]
+   (FLV-acc (P_env ...) e)]
   [(FLV-acc (P_env ...) (swap e_1 e_2 e_3))
    (P_fl1 ... P_fl2 ... P_fl3 ...)
    (where (P_fl1 ...) (FLV-acc (P_env ...) e_1))
