@@ -664,17 +664,20 @@
    ------------------- Swap
    (L3-type loc-env type-env_1 (swap e_1 e_2 e_3) ((Cap P T_3) ⊗ T_1) type-env_4)]
   
-  [(L3-type (loc_env ... P) type-env_1 e T type-env_2)
+  [(L3-type (P_env ... P) type-env_1 e T type-env_2)
    ------------------- LFun
-   (L3-type (loc_env ...) type-env_1 (Λ P e) (∀ P T) type-env_2)]
+   (L3-type (P_env ...) type-env_1 (Λ P e) (∀ P T) type-env_2)]
   
-  [(L3-type (loc_env1 ... loc_1 loc_env2 ...) type-env_1 e (∀ P_2 T) type-env_2)
+  [(L3-type (P_env1 ... loc_1 P_env2 ...) type-env_1 e (∀ P_2 T) type-env_2)
    ------------------- LApp
-   (L3-type (loc_env1 ... loc_1 loc_env2 ...) type-env_1 (e loc_1) (type-substp T P_2 loc_1) type-env_2)]
+   (L3-type (P_env1 ... loc_1 P_env2 ...) type-env_1 (e loc_1) (type-substp T P_2 loc_1) type-env_2)]
   
-  [(L3-type (loc loc_env1 ...) type-env_1 e (type-substp T P loc) type-env_2)
+  [; there is no defined strategy for choosing rho/p in the L3 paper
+   ; we need a deterministic strategy that is statically predicatable. while this
+   ; static predicatability isn't necessary for programming due to Let-LPack, it is useful for testing
+   (L3-type (P_env1 ... P P_env2 ...) type-env_1 e T type-env_2)
    ------------------- LPack
-   (L3-type (loc loc_env1 ...) type-env_1 (loc // e) (∃ P T) type-env_2)]
+   (L3-type (P_env1 ... P P_env2 ...) type-env_1 (P // e) (∃ P T) type-env_2)]
   
   [(L3-type (loc_env ...) type-env_1 e_1 (∃ P T_1) type-env_2)
    (L3-type (loc_env ... P) type-env_2 e_2 T_2 type-env_3) 
@@ -761,14 +764,30 @@
   (check-true (judgment-holds (L3-type () () (new *) (∃ p ( (Cap p I) ⊗ (! (Ptr p)) )) ())))
   (check-true (judgment-holds (L3-type () () (new (Λ p (λ (x (Ptr p)) x))) (∃ p ( (Cap p (∀ p ((Ptr p) -o (Ptr p)))) ⊗ (! (Ptr p)) )) ())))
   
+  ; --- L3-type Free
+  (check-true (judgment-holds (L3-type () () (free (new *)) (∃ p I) ())))
+  (check-true (judgment-holds (L3-type () ((♭ x (∃ p ((Cap p I) ⊗ (! (Ptr p)))))) (free x) (∃ p I) ((♯ x (∃ p ((Cap p I) ⊗ (! (Ptr p)))))))))
+  
+  ; --- L3-type Swap
+  (check-true (judgment-holds (L3-type (p) ((♭ x-cap (Cap p I)) (♭ x-ptr (Ptr p))) (swap x-cap x-ptr (λ (x I) x)) ((Cap p (I -o I)) ⊗ I) ((♯ x-cap (Cap p I)) (♯ x-ptr (Ptr p)))))) 
+
   ; --- L3-type Let-Bang
   (check-true (judgment-holds (L3-type () ((♭ x I)) (let (! x) = (! *) in x) I ((♭ x I)))))
   ; x has been stripped of its linearity inside let body, so we shouldn't be able to duplicate it
   (check-false (judgment-holds (L3-type () ((♭ y (! I))) (let (! x) = y in (dupl x)) ( (! I) ⊗ (! I) ) ((♯ y (! I))))))
   
   
+  
+  
   ; Mixed feature tests
   (check-true (judgment-holds (L3-type () () (let (! x) = (! (λ (x I) x)) in (x *)) I ())))
+;  (check-true (judgment-holds (L3-type () () (let (p // x-cap-ptr) = (new *) in 
+;                                              (let (x-cap / x-bang-ptr) = x-cap-ptr in 
+;                                              (let (! x-ptr) = x-bang-ptr in 
+;                                              (let (x / y) = (swap x-cap x-ptr (λ (x I) x)) in 
+;                                              (let * = y in (p // (x / y))))))) 
+;                                       (∃ p ( (Cap p (I -o I) ⊗ I ) ) ) ())))
+  
   
   )
 
