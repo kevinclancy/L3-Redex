@@ -133,15 +133,6 @@
 ;  (check-equal? (term (FreeVars ((λ (x I) z) y))) '(z y))
 ;  (check-equal? (term (FreeVars (let (x / y) = (x z) in (x y)))) '(x z)))
 
-;     I
-;     (T ⊗ T) ;tensor product. \otimes + alt-\ gives ⊗
-;     (T -o T) ;linear function
-;     (! T) ; unrestricted "of course" type
-;     (Ptr loc) ;type of pointer to location w
-;     (Cap loc T) ;capability for location w, where the value stored at w has type T
-;     (∀ P T) ; location abstraction type
-;     (∃ P T)); location package type
-
 (define-metafunction L3
   type-FL : (loc ...) T -> (loc ...)
   [(type-FL (loc ...) I) ()]
@@ -432,31 +423,14 @@
    -------------------
    (alpha-eq? (let (P_1 // X_1) = e_11 in e_12) (let (P_2 // X_2) = e_21 in e_22))])
 
-; in order to compare store/expression pairs, I think we are going to have to assume that
-; the ith entry of the heap in pair A corresponds to the ith entry of the heap in pair B,
-; and then rename the locations of one of the pairs so that the location names match
-;(define-judgment-form L3
-;  #:mode (alpha-eq-state? I I)
-;  #:contract (alpha-eq-state? (store e) (store e))
-;  [
-;   -------------------
-;   (alpha-eq-state? (((l_0 v_0) (l_rest0 v_rest0) ...) e_0) 
-;                    (((l_front1 v_front1) ... (l_1 v_1) (l_back1 v_back1) ...) e_1)) 
-;   
-;  
-
-
-;(module+ test
-;  ;alpha-eq?
-;  (test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in y))) #t)
-;  (test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in x))) #f)
-;  (test-equal (judgment-holds (alpha-eq? (let (! x) = (λ (y I) y) in x) (let (! y) = (λ (z I) z) in y))) #t)
-;  
-;  ;substp
-;  (test-equal (term (substp ((Λ p (ptr l_0)) p) p l)) (term ((Λ p (ptr l_0)) l)))
-;  
-;  
-;  )
+(module+ test
+  ;alpha-eq?
+  (test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in y))) #t)
+  (test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in x))) #f)
+  (test-equal (judgment-holds (alpha-eq? (let (! x) = (λ (y I) y) in x) (let (! y) = (λ (z I) z) in y))) #t)
+  
+  ;substp
+  (test-equal (term (substp ((Λ p (ptr l_0)) p) p l)) (term ((Λ p (ptr l_0)) l))))
 
 (define ->L3 
   (reduction-relation 
@@ -525,18 +499,16 @@
                     ((((,f p) x_cap) (dupl x_ptr)) (λ (x I) *))))))
   
    
-;(module+ test
-;  ;(test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in x))) #f)
-;  (test-equal (term ,(apply-reduction-relation* ->L3 (term (() ,prg1))))
-;              (term ((((l_1 (λ (x I) *))) (cap / ((! (ptr l_1)) / *))))))
-;  
-;  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in *))))
-;  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in (let (x_cap / x_single_ptr) = x_cptr in *)))))
-;  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in (let (x_cap / x_single_ptr) = x_cptr in (,f p))))))
-;  (check-equal? (apply-reduction-relation ->L3 (term (() (let * = * in *)))) (term ((() *))))
-;  (check-equal? (apply-reduction-relation ->L3 (term (() (let * = * in (let * = * in *))))) (term ((() (let * = * in *))))))
-;   
-
+(module+ test
+  (test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in x))) #f)
+  (test-equal (term ,(apply-reduction-relation* ->L3 (term (() ,prg1))))
+              (term ((((l_1 (λ (x I) *))) (cap / ((! (ptr l_1)) / *))))))
+  
+  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in *))))
+  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in (let (x_cap / x_single_ptr) = x_cptr in *)))))
+  (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in (let (x_cap / x_single_ptr) = x_cptr in (,f p))))))
+  (check-equal? (apply-reduction-relation ->L3 (term (() (let * = * in *)))) (term ((() *))))
+  (check-equal? (apply-reduction-relation ->L3 (term (() (let * = * in (let * = * in *))))) (term ((() (let * = * in *))))))
 
 ; another approach to accomplishing this would be to use a judgment form
 ; this is more efficient, and seems just as readable, if not more so
@@ -545,38 +517,6 @@
   [(loc-subset (loc_1 ...) (loc_2 ...)) #t
    (where #t ,(subset? (apply set (term (loc_1 ...))) (apply set (term (loc_2 ...)))))]
   [(loc-subset (loc_1 ...) (loc_2 ...)) #f])
-
-;;;THIS WAS A FLAWED IDEA
-;;NOTE: this could be done entirely with pattern matching: ((X_0 T_0) ...) ((X_0 T_0) ... (X_1 T_1) (X_2 T_2) (X_3 T_3) ...)
-;;the first argument is a type environment directly after 2 bindings were introduced
-;;the second argument some legal output type environment for the binding form
-;;more concretely, the second argument is a prefix of the first argument which is at 
-;;least two entries shorter
-;(define-judgement-form L3
-;  #:mode (geq2-bindings-removed I I)
-;  #:contract (geq2-bindings-removed type-env type-env)
-;  [(geq2-bindings-removed ((X_0 T_0) ...) ((X_1 T_1) ...)) 
-;   ------------------- (Peel)
-;   (geq2-bindings-removed ((X T) (X_0 T_0) ...) ((X T) (X_1 T_1) ...))]
-;  
-;  [------------------- (Base)
-;   (geq2-bindings-removed ((X_0 T_0) (X_1 T_1) (X_2 T_2) ...) ())])
-;
-;;the first argument is a type environment directly after 1 binding was introduced
-;;the second argument some legal output type environment for the binding form
-;;more concretely, the second argument is a prefix of the first argument which is at 
-;;least one entry shorter
-;(define-judgement-form L3
-;  #:mode (geq1-binding-removed I I)
-;  #:contract (geq1-binding-removed type-env type-env)
-;  [(geq1-binding-removed ((X_0 T_0) ...) ((X_1 T_1) ...)) 
-;   ------------------- (Peel)
-;   (geq1-binding-removed ((X T) (X_0 T_0) ...) ((X T) (X_1 T_1) ...))]
-;  [------------------- (Base)
-;   (geq1-binding-removed ((X_0 T_0) (X_1 T_1) ...) ())])
-  
-;TODO: add g1 binding removed judgement
-
 
 ; the first argument is the input type environment for type checking a term
 ; the second argument is the output type environment from type checking the term
@@ -679,11 +619,12 @@
    ------------------- LPack
    (L3-type (P_env1 ... P P_env2 ...) type-env_1 (P // e) (∃ P T) type-env_2)]
   
-  [(L3-type (loc_env ...) type-env_1 e_1 (∃ P T_1) type-env_2)
-   (L3-type (loc_env ... P) type-env_2 e_2 T_2 type-env_3) 
-   (where #t (loc-subset (type-FreeLocs T_1) (loc_env ...)))
+  [(L3-type (loc_env ...) type-env_1 e_1 (∃ P T_1) ((U_env2 X_env2 T_env2) ...))
+   (L3-type (loc_env ... P) ((U_env2 X_env2 T_env2) ... (♭ X T_1)) e_2 T_2 ((U_env3 X_env3 T_env3) ... (♯ X T_1))) 
+   (where #t (loc-subset (type-FreeLocs T_1) (loc_env ... P)))
+   (where #f (loc-subset (P) (type-FreeLocs T_2)))
    ------------------- Let-LPack
-   (L3-type (loc_env ...) type-env_1 (let (P // x) = e_1 in e_2) T_2 type-env_3)]
+   (L3-type (loc_env ...) type-env_1 (let (P // X) = e_1 in e_2) T_2 ((U_env3 X_env3 T_env3) ... ))]
   
   [(L3-type loc-env type-env_1 e_1 (T_11 ⊗ T_12) ((U_env2 X_env2 T_env2) ...))
    (L3-type loc-env ((U_env2 X_env2 T_env2) ... (♭ X_1 T_11) (♭ X_2 T_12)) e_2 T ((U_env3 X_env3 T_env3) ... (♯ X_1 T_11) (♯ X_2 T_12)))
@@ -718,7 +659,6 @@
   
   ; --- L3-type App
   (check-true (judgment-holds (L3-type () ((♭ x I)) ((λ (y I) y) x) I ((♯ x I)))))
-  
   
   ; --- L3-type Let-Unit ---
   (check-true (judgment-holds (L3-type (p1) ((♭ x I)) (let * = x in *) I ((♯ x I)))))
@@ -775,18 +715,32 @@
   (check-true (judgment-holds (L3-type () ((♭ x I)) (let (! x) = (! *) in x) I ((♭ x I)))))
   ; x has been stripped of its linearity inside let body, so we shouldn't be able to duplicate it
   (check-false (judgment-holds (L3-type () ((♭ y (! I))) (let (! x) = y in (dupl x)) ( (! I) ⊗ (! I) ) ((♯ y (! I))))))
-  
-  
-  
-  
+    
   ; Mixed feature tests
   (check-true (judgment-holds (L3-type () () (let (! x) = (! (λ (x I) x)) in (x *)) I ())))
-;  (check-true (judgment-holds (L3-type () () (let (p // x-cap-ptr) = (new *) in 
-;                                              (let (x-cap / x-bang-ptr) = x-cap-ptr in 
-;                                              (let (! x-ptr) = x-bang-ptr in 
-;                                              (let (x / y) = (swap x-cap x-ptr (λ (x I) x)) in 
-;                                              (let * = y in (p // (x / y))))))) 
-;                                       (∃ p ( (Cap p (I -o I) ⊗ I ) ) ) ())))
+  (check-true (judgment-holds (L3-type () () (let (p // x-cap-ptr) = (new *) in (p // x-cap-ptr)) 
+                                             (∃ p ( (Cap p I) ⊗ (! (Ptr p) ) ) ) ())))
+  
+  (check-true (judgment-holds (L3-type () () (let (p // x-cap-ptr) = (new *) in 
+                                             (let (x-cap / x-bang-ptr) = x-cap-ptr in 
+                                             (let * = (drop x-bang-ptr) in
+                                             (p // x-cap))))
+                                       (∃ p (Cap p I) ) ())))
+  
+  (check-true (judgment-holds (L3-type () () (let (p // x-cap-ptr) = (new *) in 
+                                             (let (x-cap / x-bang-ptr) = x-cap-ptr in 
+                                             (let (! x-ptr) = x-bang-ptr in 
+                                             (let (x / y) = (swap x-cap x-ptr (λ (x I) x)) in 
+                                             (let * = y in (p // x))))))
+                                       (∃ p (Cap p (I -o I) ) ) ())))
+
+  ; p cannot be a free variable in the type of the body of the lpack binding
+  (check-false (judgment-holds (L3-type () () (let (p // x-cap-ptr) = (new *) in 
+                                             (let (x-cap / x-bang-ptr) = x-cap-ptr in 
+                                             (let (! x-ptr) = x-bang-ptr in 
+                                             (let (x / y) = (swap x-cap x-ptr (λ (x I) x)) in 
+                                             (let * = y in x)))))
+                                       (Cap p (I -o I)) ())))
   
   
   )
