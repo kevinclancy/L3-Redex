@@ -87,26 +87,27 @@
     (store (in-hole E (subst (substp e P L) X v))) 
     let-lpack)))
 
-  (define f (term (Λ p    
-             (λ (x_c1  (Cap p I)) 
-                    (λ (x_xyptrs ((! (Ptr p)) ⊗ (! (Ptr p)))) 
-                      (λ (x_v (I -o I)) 
-                        (let (x / y) = x_xyptrs in
-                          (let (! x_xptr) = x in
-                          (let (x_c2 / z) = (swap x_c1 x_xptr x_v) in
-                            (x_c2 / (y / z)))))))))))
+(define f (term (Λ p
+                   
+                   (λ (x_c1  (Cap p I)) 
+                     (λ (x_xyptrs ((! (Ptr p)) ⊗ (! (Ptr p)))) 
+                       (λ (x_v (I -o I)) 
+                         (let (x / y) = x_xyptrs in
+                           (let (! x_xptr) = x in
+                             (let (x_c2 / z) = (swap x_c1 x_xptr x_v) in
+                               (x_c2 / (y / z)))))))))))
 
 
-  (define prg1 (term 
-                (let (p // x_cptr) = (new *) in 
-                  (let (x_cap / x_ptr) = x_cptr in 
-                    ((((,f p) x_cap) (dupl x_ptr)) (λ (x I) *))))))
+(define prg1 (term 
+              (let (p // x_cptr) = (new *) in 
+                (let (x_cap / x_ptr) = x_cptr in 
+                  (p // ((((,f p) x_cap) (dupl x_ptr)) (λ (x I) x)))))))
   
    
 (module+ test
   (test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in x))) #f)
   (test-equal (term ,(apply-reduction-relation* ->L3 (term (() ,prg1))))
-              (term ((((l_1 (λ (x I) *))) (cap / ((! (ptr l_1)) / *))))))
+              (term ((((l_1 (λ (x I) x))) (cap / ((! (ptr l_1)) / *))))))
   
   (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in *))))
   (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in (let (x_cap / x_single_ptr) = x_cptr in *)))))
@@ -458,7 +459,7 @@
 
   ; --- L3-type Let-Bang
   (check-true (judgment-holds (L3-type () ((♭ x I)) (let (! x) = (! *) in x) I ((♭ x I)))))
-  ; x has been stripped of its linearity inside let body, so we shouldn't be able to duplicate it
+  ; x has been stripped of its unrestrictedness inside let body, so we shouldn't be able to duplicate it
   (check-false (judgment-holds (L3-type () ((♭ y (! I))) (let (! x) = y in (dupl x)) ( (! I) ⊗ (! I) ) ((♯ y (! I))))))
     
   ; Mixed feature tests
@@ -583,7 +584,7 @@
   (redex-match? L3 e lrswap)
   (redex-match? L3 e swapint)
   
-;  (traces ->L3 (term (() ,swapint)))   
+  (traces ->L3 (term (() ,swapint)))   
   
   (build-derivations (L3-type () () ,lrswap T ()))
 
