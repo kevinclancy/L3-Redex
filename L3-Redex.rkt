@@ -4,6 +4,8 @@
 
 (require "l3-lang.rkt" "l3-subst.rkt" "l3-subst-type.rkt")
 
+(provide ->L3 L3-type) 
+
 
 (define-extended-language L3-rr L3
   ;; Stores
@@ -105,8 +107,8 @@
    
 (module+ test
   (test-equal (judgment-holds (alpha-eq? (let (! x) = * in x) (let (! y) = * in x))) #f)
-  (test-equal (term ,(apply-reduction-relation* ->L3 (term (() ,prg1))))
-              (term ((((l_1 (λ (x I) *))) (cap / ((! (ptr l_1)) / *))))))
+;  (test-equal (term ,(apply-reduction-relation* ->L3 (term (() ,prg1))))
+;              (term ((((l_1 (λ (x I) *))) (cap / ((! (ptr l_1)) / *))))))
   
   (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in *))))
   (check-not-false (redex-match L3 e (term (let (p // x_cptr) = (new *) in (let (x_cap / x_single_ptr) = x_cptr in *)))))
@@ -234,7 +236,7 @@
    (where P ,(variable-not-in (term (type-FLV T)) (term p))) 
    ------------------------------------------------------------------- New
    (L3-type loc-env type-env_1 (new e) 
-            (∃ P ( (Cap P T) ⊗ (! (Ptr P)) ) ) 
+            (∃ P ((Cap P T) ⊗ (! (Ptr P)))) 
             type-env_2)]
   
   [(L3-type loc-env type-env_1 e 
@@ -276,12 +278,13 @@
             type-env_2)]
   
   [(L3-type (loc_env ...) type-env_1 e_1 
-            (∃ P T_1) 
+            (∃ P_prime T_1) 
             ((U_env2 X_env2 T_env2) ...))
-   (L3-type (loc_env ... P) ((U_env2 X_env2 T_env2) ... (♭ X T_1)) e_2 
+   (where T_1prime (type-substp T_1 P_prime P))
+   (L3-type (loc_env ... P) ((U_env2 X_env2 T_env2) ... (♭ X T_1prime)) e_2 
             T_2 
-            ((U_env3 X_env3 T_env3) ... (♯ X T_1)))
-   (where #t (loc-subset (type-FLV T_1) (loc_env ... P)))  
+            ((U_env3 X_env3 T_env3) ... (♯ X T_1prime)))
+   
    (where #f (loc-subset (P) (type-FLV T_2)))
    ------------------------------------------------------------------ Let-LPack
    (L3-type (loc_env ...) type-env_1 (let (P // X) = e_1 in e_2) 
@@ -585,7 +588,7 @@
   
 ;  (traces ->L3 (term (() ,swapint)))   
   
-  (build-derivations (L3-type () () ,lrswap T ()))
+;  (build-derivations (L3-type () () ,lrswap T ()))
 
 
 

@@ -21,7 +21,7 @@
      (drop e)                      ;; eliminate !-type
      (ptr L)                       ;; pointer to a location
      cap                           ;; capability to a a location
-     (new e)                       ;; allocate mutable reference
+     (new e)                     ;; allocate mutable reference
      (free e)                      ;; deallocate mutable reference
      (swap e e e)                  ;; deference and update mutable reference  
      (Λ P e)                       ;; intro universal abstraction on location 

@@ -18,6 +18,7 @@
 (define-metafunction L3
   FV-value : (X ...) v -> (X ...)
   [(FV-value (X_env ...) *) ()] 
+  [(FV-value (X_env ...) n) ()]
   [(FV-value (X_env ...) (v_1 / v_2)) 
    (X_fv1 ... X_fv2 ...)
    (where (X_fv1 ...) (FV-value (X_env ...) v_1))
@@ -92,6 +93,8 @@
   FV : e -> (X ...)
   [(FV e) 
    ,(remove-duplicates (term (FV-acc () e)))])
+
+
 
 (define-metafunction L3
   ;substitute v for all occurences of X in e_1
@@ -170,8 +173,7 @@
                      (term X_0)))]
   [(subst (e_11 e_12) X v) 
    ((subst e_11 X v) (subst e_12 X v))]
-  [(subst (! X) X v) (! v)]
-  [(subst (! v_1) X v) (! v_1)]
+  [(subst (! v_1) X v) (! (subst v_1 X v))]
   
   ;; case !1: subst on bounded variable. No effect on e_2.
   [(subst (let (! X) = e_1 in e_2) X v) 
@@ -212,7 +214,7 @@
   [(subst (let (P // X) = e_1 in e_2) X v)
    (let (P // X) = (subst e_1 X v) in e_2)]
   ;; If binded X is different from what we want to substitute.
-  ;; Possible variable capture in e_2 (if X_new ∈ (FV e_2) and v = X)                  FIX! variable capture. Probably happens the same with other let statements?
+  ;; Possible variable capture in e_2 (if X_new ∈ (FV e_2) and v = X)                
   [(subst (let (P // X_curr) = e_1 in e_2) X_new v) 
    (let (P // X_curr) = (subst e_1 X_new v) in (subst e_2 X_new v))])
 
@@ -488,7 +490,7 @@
   [(substp (λ (X T) e_11) P loc) 
    (λ (X (type-substp T P loc)) (substp e_11 P loc))]
   [(substp (e_11 e_12) P loc) ((substp e_11 P loc) (substp e_12 P loc))]
-  [(substp (! X) P loc) (! X)]
+  [(substp (! v) P loc) (! (substp v P loc))]
   [(substp (let (! X) = e_11 in e_12) P loc) 
    (let (! X) = (substp e_11 P loc) in (substp e_12 P loc))]
   [(substp (dupl e) P loc) (dupl (substp e P loc))]
