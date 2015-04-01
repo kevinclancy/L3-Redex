@@ -30,7 +30,13 @@
      (swap v_1 v_2 E)
      (E L)
      (L // E)
-     (let (P // X) = E in e)))
+     (let (P // X) = E in e)
+     (inl E)
+     (inr E)
+     (case E of (inl X) => e_l \| (inr X) => e_r)
+     (fold [T] E)
+     (unfold [T] E)
+     ))
 
 (define ->L3 
   (reduction-relation 
@@ -87,7 +93,23 @@
    (--> ;; let-lpack
     (store (in-hole E (let (P // X) = (L // v) in e)))
     (store (in-hole E (subst (substp e P L) X v))) 
-    let-lpack)))
+    let-lpack)
+   (--> ;; case-inl 
+    (store (in-hole E (case (inl v as T) of 
+                       (inl X_l) => e_l \|
+                       (inr X_r) => e_r)))
+    (store (in-hole E (subs e_l X_l v)))
+    case-inl)
+   (--> ;; case-inr 
+    (store (in-hole E (case (inr v as T) of 
+                        (inl X_l) => e_l \|
+                        (inr X_r) => e_r)))
+    (store (in-hole E (subs e_r X_r v)))
+    case-inr)
+   (--> ;; unfld-fld
+    (store (in-hole E (unfold [T_1] (fold [T_2] v))))
+    (store (in-hole E v))
+    unfld-fld)))
 
   (define f (term (Λ p    
              (λ (x_c1  (Cap p I)) 
@@ -188,6 +210,35 @@
    (L3-type loc-env type-env_2 e_2 T_1 type-env_3)
    ------------------------------------------------------------------- App
    (L3-type loc-env type-env_1 (e_1 e_2) T_2 type-env_3)]
+  
+  
+  [(L3-type loc-env type-env_1 e T_1 type-env_2)
+   ------------------------------------------------------------------- Inl
+   (L3-type loc-env type-env_1 (inl e as (T_1 + T_2)) 
+            (T_1 + T_2) 
+            type-env_2)]
+
+  [(L3-type loc-env type-env_1 e T_2 type-env_2)
+   -------------------------------------------------------------------- Inr
+   (L3-type loc-env type-env_1 (inr e as (T_1 + T_2)) 
+            (T_1 + T_2) 
+            type-env_2)]
+  
+  [ (L3-type loc-env type-env_1 e_c 
+             (T_1 + T_2) 
+             ((U_env2 X_env2 T_env2) ...))
+    (L3-type loc-env ((U_env2 X_env2 T_env2) ... (♭ X_l T_1)) e_l
+             T
+             ((U_env3 X_env3 T_env3) ... (♯ X_l T_1)))
+    (L3-type loc-env ((U_env3 X_env3 T_env3) ... (♭ X_r T_2)) e_r
+             T
+             ((U_env4 X_env4 T_env4) ... (♯ X_r T_2)))         
+   --------------------------------------------------------------------- Case
+   (L3-type loc-env type-env_1 (case e_c of (inl X_l) => e_l \| (inr X_r) => e_r)
+            T
+            ((U_env4 X_env4 T_env4) ...))]
+
+
   
   [(L3-type loc-env type-env_1 e_1 I type-env_2)
    (L3-type loc-env type-env_2 e_2 T type-env_3)
@@ -300,7 +351,24 @@
    ------------------------------------------------------------------- Let-Pair
    (L3-type loc-env type-env_1 (let (X_1 / X_2) = e_1 in e_2) 
             T 
-            ((U_env3 X_env3 T_env3) ...))]                     
+            ((U_env3 X_env3 T_env3) ...))]    
+  
+  [ (L3-type loc-env type-env_1 e 
+             T_subs
+             type-env_2)
+    (where T_subs (type-subst T tX (μ tX T)))
+    ------------------------------------------------------------------- T-Fold
+    (L3-type loc-env type-env_1 (fold [(μ tX T)] e) 
+             (μ tX T) 
+             type-env_2)]
+  
+  [ (L3-type loc-env type-env_1 e 
+             (μ tX T) 
+             type-env_2)
+    ------------------------------------------------------------------- T-Unfold
+    (L3-type loc-env type-env_1 (unfold [(μ tX T)] e) 
+             (type-subst T tX (μ tX T)) 
+             type-env_2)]
   )
   
 (module+ test

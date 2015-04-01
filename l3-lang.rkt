@@ -27,7 +27,15 @@
      (Λ P e)                       ;; intro universal abstraction on location 
      (e loc)                       ;; elim universal abstraction on location
      (loc // e)                    ;; intro existential abstraction on location 
-     (let (P // X) = e in e))      ;; elim existential abstraction on location 
+     (let (P // X) = e in e)      ;; elim existential abstraction on location
+     ;; Sum type extensions
+     (inl e as T)
+     (inr e as T)
+     (case e_c of (inl X) => e_l \| (inr X) => e_r)
+     ;; Recursive types extension
+     (fold [T] e)
+     (unfold [T] e))
+     
 
   ;term variable
   (X ::= 
@@ -41,7 +49,11 @@
   ;location variable
   (P ::= 
      p q r (variable-prefix p) (variable-prefix q) (variable-prefix r))
- 
+  
+  (tX ::=
+      α β γ (variable-prefix α) (variable-prefix β) (variable-prefix γ))
+  
+  
   ;values
   (v ::= 
      *
@@ -53,16 +65,22 @@
      (ptr L)
      cap
      (Λ P e)
-     (loc // v))
+     (loc // v)
+     ;; Sum type extensions
+     (inl v as T)
+     (inr v as T)
+     ;; Recursive type extension
+     (fold [T] v))
   (n ::=
      number)
   ;types
-  (T ::= 
+  (T ::=
+     tX           ;; Type variable
      I            ;; unit
      Int          ;; numbers
      (T ⊗ T)      ;; tensor product. \otimes + alt-\ gives ⊗
-;; Sum type     
-;; μ type      
+     (T + T)      ;; Sum type     
+     (μ tX T)     ;; Recursive type
      (T -o T)     ;; linear function
      (! T)        ;; unrestricted "of course" type
      (Ptr loc)    ;; type of pointer to location w

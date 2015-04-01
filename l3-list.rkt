@@ -4,6 +4,9 @@
 
 (require "l3-lang.rkt" "L3-Redex.rkt")
 
+
+;; Some small problems from L3 paper.
+
  (define lrswap
     (term 
      (λ (xref (∃ p ((Cap p Int) ⊗ (!(Ptr p))))) 
@@ -21,7 +24,15 @@
      (let (ploc // xpck) = (new 5) in
        ((,lrswap (ploc // xpck)) 10))))
      
+
+(module+ test
+  (require rackunit)
   
+  (check-true (redex-match? L3 e swapint))
+;(traces ->L3 (term (() ,swapint)))
+  (check-true (judgment-holds (L3-type () () ,lrswap T ())))
+ )
+
 
 (define setx
   (term
@@ -47,78 +58,66 @@
      (let (ploc // xpck) = (new (((! 5) / 8) / 10)) in
        ((,setx (ploc // xpck)) 33))))
 
-
-;(redex-match? L3 e lrswap)
-;(redex-match? L3 e swapint)
-;(traces ->L3 (term (() ,swapint)))
-;(judgment-holds (L3-type () () ,lrswap T ()))
-
-
-;(redex-match? L3 e setx)
-;(redex-match? L3 e setxarg)
+(module+ test
+  (check-true (redex-match? L3 e setx))
+  (check-true (redex-match? L3 e setxarg))
 ;(traces ->L3 (term (() ,setxarg)))
-;(judgment-holds (L3-type () () ,setxarg T type-env))
+;  (check-true (judgment-holds (L3-type () () ,setxarg T type-env)))
+)
 
 
-
+;; Iterative definition of a list.
+;; Too complicated to handle because of types...
 (define init4list
   (term
    (λ (x1 Int)
      (λ (x2 Int)
        (λ (x3 Int)
          (λ (x4 Int)
-           (let (p0 // xcpd) = (new *) in                   ;; Dummy end node
+           (let (p0 // xcpd) = (new *) in                   
            (let (p1 // xcp1) = (new (x1 / (p0 // xcpd))) in
            (let (p2 // xcp2) = (new (x2 / (p1 // xcp1))) in
            (let (p3 // xcp3) = (new (x3 / (p2 // xcp2))) in 
-           (let (p4 // xcp4) = (new (x4 / (p3 // xcp3))) in ;; create new node pointing to dummy node        
+           (let (p4 // xcp4) = (new (x4 / (p3 // xcp3))) in 
            (p4 // xcp4))))))))))))
-
-(define prueba1
-  (term
-   (let (pd // xcpd) = (new 3) in                  ;; Dummy end node
-   (let (xcd / xpd) = xcpd in
-   (pd // (xcd / xpd))))))
-
-
-(define prueba2
-  (term
-   (let (pd1 // xcpd1) = (new 3) in                  ;; Dummy end node
-   (let (pd2 // xcpd2) = (new 8) in
-   ((pd1 // xcpd1) / (pd2 // xcpd2))))))
-
 
 
 (define list1
   (term ((((,init4list 42) 63) 108) 1566)))
 
-(define list1-type
+
+
+;; Definition of recursive lists
+
+(define NatList
   (term
-   (∃ p4 ((Cap p4 (Int ⊗ 
-   (∃ p3 ((Cap p3 (Int ⊗ 
-   (∃ p2 ((Cap p2 (Int ⊗ 
-   (∃ p1 ((Cap p1 (Int ⊗ 
-   (∃ p0 ((Cap p0 I) ⊗ 
-     (!(Ptr p0)))))) ⊗ 
-     (!(Ptr p1)))))) ⊗ 
-     (!(Ptr p2)))))) ⊗ 
-     (!(Ptr p3)))))) ⊗ 
-     (!(Ptr p4))))))
+   (μ α (I + (Int ⊗ (∃ p ((Cap p α) ⊗ (! (Ptr p)))))))))
 
-(redex-match? L3 T list1-type)
+(define NLBody
+  (term
+   (I + (Int ⊗ (∃ p ((Cap p ,NatList) ⊗ (! (Ptr p))))))))
 
 
-(define first
-  (term 
-   (λ (x_ref ,list1-type)
-     ((,lrswap x_ref) 10) ,list1)))
-       
+(define nil
+  (term
+   (fold [,NatList]
+         (inl * as ,NLBody))))
+
+(define cons
+  (term
+   (λ (x_n Int)
+     (λ (x_list ,NatList)
+       (fold [,NatList]
+       (inr (x_n / (new  x_list)) as ,NLBody))))))
 
 
-;(redex-match? L3 e prueba2)
-;(traces ->L3 (term (() ,prueba2)))
-;(judgment-holds (L3-type () () ,prueba2 T type-env))
+(module+ test
+ 
+  (check-true (redex-match? L3 T NatList))
+  (check-true (redex-match? L3 T NLBody))
+  (check-true (redex-match? L3 e nil))
+  (check-true (redex-match? L3 e cons))
 
-(redex-match? L3 e first)
-(traces ->L3 (term (() ,first)))
-;(judgment-holds (L3-type () () ,list1 T type-env))
+  (check-true (judgment-holds (L3-type () () ,nil T type-env)))
+  (check-true (judgment-holds (L3-type () () ,cons T type-env)))
+)

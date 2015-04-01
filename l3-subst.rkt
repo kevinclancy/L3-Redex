@@ -34,7 +34,11 @@
   [(FV-value (X_env ...) (loc // v)) 
    (FV-value (X_env ...) v)]
   [(FV-value (X_env1 ... X_term X_env2 ...) X_term) ()]
-  [(FV-value (X_env ...) X_term) (X_term)])
+  [(FV-value (X_env ...) X_term) (X_term)]
+  [(FV-value (X_env ...) (inl v as T)) 
+   (FV-value (X_env ...) v)]
+  [(FV-value (X_env ...) (inr v as T)) 
+   (FV-value (X_env ...) v)])
 
 
 ;;auxiliary function for FV
@@ -86,7 +90,18 @@
   [(FV-acc (X_env ...) (let (loc // X) = e_1 in e_2))
    (X_fv1 ... X_fv2 ...)
    (where (X_fv1 ...) (FV-acc (X_env ...) e_1))
-   (where (X_fv2 ...) (FV-acc (X X_env ...) e_2))])
+   (where (X_fv2 ...) (FV-acc (X X_env ...) e_2))]
+  [(FV-acc (X_fv1 ...) (inl e as T))
+   (FV-acc (X_fv1 ...) e)]
+  [(FV-acc (X_fv1 ...) (inr e as T))
+   (FV-acc (X_fv1 ...) e)]
+  [(FV-acc (X_env ...) (case e_c of (inl X) => e_l \| (inr X) => e_r))
+   (X_envc ... X_envl ... X_envr ...)
+   (where (X_envc ...) (FV-acc (X X_env ...) e_c))
+   (where (X_envl ...) (FV-acc (X X_env ...) e_l))
+   (where (X_envr ...) (FV-acc (X X_env ...) e_r))])
+
+
 
 ; returns list (from left to right) of all free variables of input expression
 (define-metafunction L3
@@ -181,7 +196,7 @@
   ;; case !2: X_0 not in FV(v), no capture risk. 
   [(subst (let (! X_0) = e_1 in e_2) X v) 
    (let (! X_0) = (subst e_1 X v) in (subst e_2 X v))
-   (side-condition (not(member? (term X_0) (term (FV v)))))]
+   (side-condition (not (member? (term X_0) (term (FV v)))))]
   ;; case !3: X_0 in FV(v), have to rename.
   [(subst (let (! X_0) = e_1 in e_2) X v)
    (let (! X_1fresh) = (subst e_1 X v) in 
@@ -199,8 +214,8 @@
   [(subst (swap e_1 e_2 e_3) X v) 
    (swap (subst e_1 X v) (subst e_2 X v) (subst e_3 X v))]
   [(subst (Λ P e) X v) 
-   (Λ P_prime (subst (substp e P P_prime) X v))
-   (where P_prime ,(variable-not-in 
+   (Λ P_fresh (subst (substp e P P_fresh) X v))
+   (where P_fresh ,(variable-not-in 
                     (term ((FLV e) (FLV v))) 
                     (term P)))]
   [(subst (e loc) X v) ((subst e X v) loc)]
@@ -216,19 +231,28 @@
   ;; If binded X is different from what we want to substitute.
   ;; Possible variable capture in e_2 (if X_new ∈ (FV e_2) and v = X)                
   [(subst (let (P // X_curr) = e_1 in e_2) X_new v) 
-   (let (P // X_curr) = (subst e_1 X_new v) in (subst e_2 X_new v))])
-
-
-;(subst (let (p // xcp) = xref in 
-;       (let (x_c0 / xp0) = xcp in 
-;       (let (xp1 / xp2) = (dupl xp0) in 
-;       (let (! xp4) = xp2 in 
-;       (let (xc1 / y) = (swap xc0 xp4 x) in 
-;       ((p // (xc1 / xp1)) / y)))))) x x3)
-
-
-
-
+   (let (P // X_curr) = (subst e_1 X_new v) in (subst e_2 X_new v))]
+  [(subst (inl e as T) X v)
+   (inl (subst e X v) as T)]
+  [(subst (inr e as T) X v)
+   (inr (subst e X v) as T)]
+  ;; case case-1: subst on bounded variable. No effect on e_l or e_r.
+  [(subst (case e_c of (inl X) => e_l \| (inr X) => e_r) X v)
+   (case (subst e_c X v) of (inl X) => e_l \| (inr X) => e_r)]
+  ;; case case-2: Bounded X is not in FV(v), no capture risk.
+  [(subst (case e_c of (inl X_b) => e_l \| (inr X_b) => e_r) X v)
+   (case (subst e_c X v) of 
+     (inl X_b) => (subst e_l X v) \| 
+     (inr X_b) => (subst e_r X v))
+   (side-condition (not (member? (term X_b) (term (FV v)))))]
+  ;; case case-3: Bounded X in FV(v), have to rename.
+  [(subst (case e_c of (inl X_b) => e_l \| (inr X_b) => e_r) X v)
+   (case (subst e_c X v) of 
+     (inl X_fresh) => (subst (subst e_l X_b X_fresh) X v) \| 
+     (inr X_fresh) => (subst (subst e_r X_b X_fresh) X v))
+   (where X_fresh ,(variable-not-in 
+                    (term ((FV e_l) (FV e_r) (FV v))) 
+                    (term X_b)))])
 
 
 (define-judgment-form L3
@@ -402,7 +426,11 @@
    (FLV-value (P P_env ...) v)]
   [(FLV-value (P_env ...) (L // v)) 
    (FLV-value (P_env ...) v)]
-  [(FLV-value (P_env ...) X) ()])
+  [(FLV-value (P_env ...) X) ()]
+  [(FLV-value (P_env ...) (inl v as T)) 
+   (FLV-value (P_env ...) v)]
+  [(FLV-value (P_env ...) (inr v as T)) 
+   (FLV-value (P_env ...) v)])
 
 
 (define-metafunction L3
@@ -468,7 +496,16 @@
   [(FLV-acc (P_env ...) (let (P // X) = e_1 in e_2))
    (P_fl1 ... P_fl2 ...)
    (where (P_fl1 ...) (FLV-acc (P_env ...) e_1))
-   (where (P_fl2 ...) (FLV-acc (P P_env ...) e_2))])
+   (where (P_fl2 ...) (FLV-acc (P P_env ...) e_2))]
+  [(FLV-acc (P_env ...) (inl e as T))
+   (FLV-acc (P_env ...) e)]
+  [(FLV-acc (P_env ...) (inr e as T))
+   (FLV-acc (P_env ...) e)]
+  [(FLV-acc (P_env ...) (case e_c of (inl X) => e_l \| (inr X) => e_r))
+   (P_envc ... P_envl ... P_envr ...)
+   (where (P_envc ...) (FLV-acc (P_env ...) e_c))
+   (where (P_envl ...) (FLV-acc (P_env ...) e_l))
+   (where (P_envr ...) (FLV-acc (P_env ...) e_r))])
 
 (define-metafunction L3
   FLV : e -> (loc ...)
@@ -530,7 +567,14 @@
    (let (P // X) = (substp e_1 P loc) in e_2)]
   [(substp (let (P_1 // X) = e_1 in e_2) P loc)
    (let (P_1 // X) = (substp e_1 P loc) in (substp e_2 P loc))]
-  )
+  [(substp (inl e as T) P loc)
+   (inl (substp e P loc) as T)]
+  [(substp (inr e as T) P loc)
+   (inr (substp e P loc) as T)]
+  [(substp (case e_c of (inl X) => e_l \| (inr X) => e_r) P loc)
+   (case (substp e_c P loc) of 
+     (inl X) => (substp e_l P loc) \| 
+     (inr X) => (substp e_r P loc))])
 
 
 

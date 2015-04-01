@@ -2,13 +2,23 @@
 
 (require redex "l3-lang.rkt")
 
-(provide type-FLV type-substp alpha-eq-T?)
+(provide type-FLV type-substp type-subst alpha-eq-T?)
+
+(define (member? u lst)
+  (not (equal? (member u lst) #f)))
+
+
 
 (define-metafunction L3
   type-FLV-acc : (P ...) T -> (P ...)
   [(type-FLV-acc (P ...) I) ()]
   [(type-FLV-acc (P ...) Int) ()]
+  [(type-FLV-acc (P ...) tX ) ()]
   [(type-FLV-acc (P ...) (T_1 ⊗ T_2)) 
+   (P_FL1 ... P_FL2 ...)
+   (where (P_FL1 ...) (type-FLV-acc (P ...) T_1))
+   (where (P_FL2 ...) (type-FLV-acc (P ...) T_2))]
+  [(type-FLV-acc (P ...) (T_1 + T_2)) 
    (P_FL1 ... P_FL2 ...)
    (where (P_FL1 ...) (type-FLV-acc (P ...) T_1))
    (where (P_FL2 ...) (type-FLV-acc (P ...) T_2))]
@@ -31,21 +41,24 @@
    (P P_T ...)
    (where (P_T ...) (type-FLV-acc (P_env ...) T))]
   [(type-FLV-acc (P_env ...) (∀ P T)) (type-FLV-acc (P P_env ...) T)]
-  [(type-FLV-acc (P_env ...) (∃ P T)) (type-FLV-acc (P P_env ...) T)])
+  [(type-FLV-acc (P_env ...) (∃ P T)) (type-FLV-acc (P P_env ...) T)]
+  [(type-FLV-acc (P_env ...) (μ tX T)) (type-FLV-acc (P_env ...) T)])
   
 (define-metafunction L3
   type-FLV : T -> (P ...)
   [(type-FLV T) 
    ,(remove-duplicates (term (type-FLV-acc () T)))])
 
-
 ;location substitution for types
 (define-metafunction L3
   type-substp : T_in P loc -> T_out
   [(type-substp I P loc) I]
   [(type-substp Int P loc) Int]
+  [(type-substp tX P loc) tX]
   [(type-substp (T_1 ⊗ T_2) P loc) 
    ((type-substp T_1 P loc) ⊗ (type-substp T_2 P loc))]
+  [(type-substp (T_1 + T_2) P loc) 
+   ((type-substp T_1 P loc) + (type-substp T_2 P loc))]
   [(type-substp (T_1 -o T_2) P loc) 
    ((type-substp T_1 P loc) -o (type-substp T_2 P loc))]
   [(type-substp (! T) P loc) (! (type-substp T P loc))]
@@ -100,10 +113,22 @@
   [--------------------------------------------------------- α-Unit
    (type-alpha-eq? I I)]
 
+  
+   [--------------------------------------------------------- α-Int
+   (type-alpha-eq? Int Int)]
+  
+   [--------------------------------------------------------- α-Type-Var
+   (type-alpha-eq? tX tX)]
+  
   [(type-alpha-eq? T_11 T_21)
    (type-alpha-eq? T_12 T_22)
    --------------------------------------------------------- α-Mult
    (type-alpha-eq? (T_11 ⊗ T_12) (T_21 ⊗ T_22))]
+  
+  [(type-alpha-eq? T_11 T_21)
+   (type-alpha-eq? T_12 T_22)
+   --------------------------------------------------------- α-Sum
+   (type-alpha-eq? (T_11 + T_12) (T_21 + T_22))]
 
   [(type-alpha-eq? T_11 T_21)
    (type-alpha-eq? T_12 T_22)
@@ -156,7 +181,7 @@
             (term ((type-FreeLocs T_1) (type-FreeLocs T_2))) 
             (term P_1)))
    (type-alpha-eq? 
-    (substp T_1 P_1 P_3) (substp T_2 P_2 P_3))
+    (type-substp T_1 P_1 P_3) (type-substp T_2 P_2 P_3))
    --------------------------------------------------------- α-Exists
    (type-alpha-eq?
     (∃ P_1 T_1) (∃ P_2 T_2))])
@@ -165,7 +190,81 @@
 (define (alpha-eq-T? t1 t2)
   (judgment-holds (type-alpha-eq? ,t1 ,t2)))
 
+;; -----------------------------------------------------------------------------
+;; Type substitution (for recursive types)
+;; -----------------------------------------------------------------------------
 
+(define-metafunction L3
+  type-FV-acc : (tX ...) T -> (tX ...)
+  [(type-FV-acc (tX_env ...) I) ()]
+  [(type-FV-acc (tX_env ...) Int) ()]
+  [(type-FV-acc (tX_env1 ... tX tX_env2 ...) tX) ()]
+  [(type-FV-acc (tX_env ...) tX) (tX)] 
+  [(type-FV-acc (tX_env ...) (T_1 ⊗ T_2)) 
+   (tX_1 ... tX_2 ...)
+   (where (tX_1 ...) (type-FV-acc (tX_env ...) T_1))
+   (where (tX_2 ...) (type-FV-acc (tX_env ...) T_2))]
+  [(type-FV-acc (tX_env ...) (T_1 + T_2)) 
+   (tX_1 ... tX_2 ...)
+   (where (tX_1 ...) (type-FV-acc (tX_env ...) T_1))
+   (where (tX_2 ...) (type-FV-acc (tX_env ...) T_2))]
+  [(type-FV-acc (tX_env ...) (T_1 -o T_2))
+   (tX_1 ... tX_2 ...)
+   (where (tX_1 ...) (type-FV-acc (tX_env ...) T_1))
+   (where (tX_2 ...) (type-FV-acc (tX_env ...) T_2))]
+  [(type-FV-acc (tX_env ...) (! T)) 
+   (type-FV-acc (tX_env ...) T)]
+  [(type-FV-acc (tX_env ...) (Ptr loc)) ()]
+  [(type-FV-acc (tX_env ...) (Cap P T))
+   (type-FV-acc (tX_env ...) T)]
+  [(type-FV-acc (tX_env ...) (∀ P T)) 
+   (type-FV-acc (tX_env ...) T)]
+  [(type-FV-acc (tX_env ...) (∃ P T)) 
+   (type-FV-acc (tX_env ...) T)]
+  [(type-FV-acc (tX_env ...) (μ tX T))
+   (type-FV-acc (tX tX_env ...) T)])
+
+
+(define-metafunction L3
+  type-FV : T -> (tX ...)
+  [(type-FV T) 
+   ,(remove-duplicates (term (type-FV-acc () T)))])
+
+
+
+;; Type substitution for types
+(define-metafunction L3
+  type-subst : T_in tX T_new -> T_out
+  [(type-subst I tX T_new) I]
+  [(type-subst Int tX T_new) Int]
+  [(type-subst tX tX T_new) T_new]
+  [(type-subst tX_in tX T_new) tX_in]
+  [(type-subst (T_1 ⊗ T_2) tX T_new) 
+   ((type-subst T_1 tX T_new) ⊗ (type-subst T_2 tX T_new))]
+  [(type-subst (T_1 + T_2) tX T_new) 
+   ((type-subst T_1 tX T_new) + (type-subst T_2 tX T_new))]
+  [(type-subst (T_1 -o T_2) tX T_new) 
+   ((type-subst T_1 tX T_new) -o (type-subst T_2 tX T_new))]
+  [(type-subst (! T) tX T_new) (! (type-subst T tX T_new))]
+  [(type-subst (Ptr loc) tX T_new) (Ptr loc)]
+  [(type-subst (Cap loc T) tX T_new) 
+   (Cap loc (type-subst T tX T_new))]
+  [(type-subst (∀ P T) tX T_new) 
+   (∀ P (type-subst T tX T_new))]
+  [(type-subst (∃ P T) tX T_new) 
+   (∃ P (type-subst T tX T_new))]
+  ;; Case μ1 : Substitution for the bounded variable.
+  [(type-subst (μ tX T) tX T_new)
+   (μ tX T)]
+  ;; Case μ2 : Bounded variable is not in FV(T_new)
+  [(type-subst (μ tX_b T) tX T_new) 
+   (μ tX_b (type-subst T tX T_new))
+   (side-condition (not (member? (term tX_b) (term (type-FV T_new)))))] 
+  ;; Case μ3: Bounded variable in FLV(T), have to rename.
+  [(type-subst (μ tX_b T) tX T_new)
+   (μ tX_fresh (type-subst T_ren tX T_new))
+   (where tX_fresh ,(variable-not-in (term (tX_b T T_new)) (term tX_b)))
+   (where T_ren (type-substp T tX_b tX_fresh))])
 
 
 ;; -----------------------------------------------------------------------------
@@ -200,7 +299,7 @@
   (test-equal (term (type-substp ,type_1 p_1 p_new)) 
               (term ((Ptr p_new) ⊗ (Ptr p_2))))
   
-  ;; Type substitution case ∀1 
+  ;; Location type substitution case ∀1 
   (redex-match? L3 T type_2) 
   (test-equal (term (type-substp ,type_2 p_bound p_new)) 
               (term (∀ p_bound 
@@ -209,7 +308,7 @@
                        (I -o 
                        (((Cap p_bound I) ⊗ (! (Ptr p_bound))) ⊗ I)))))))
   
-  ;; Type substitution case ∀2
+  ;; Location type substitution case ∀2
   (redex-match? L3 T type_3) 
   (test-equal (term (type-substp ,type_3 p_not_bound p_new)) 
               (term (∀ p_bound 
@@ -219,7 +318,7 @@
                        (((Cap p_bound I) ⊗ (! (Ptr p_bound))) ⊗ I)))))))
   
   
-  ;; Type substitution case ∀3. Check equality modulo α-conversion.
+  ;; Location type substitution case ∀3. Check equality modulo α-conversion.
   (test-equal (term (type-substp ,type_3 p_not_bound p_bound)) 
               (term (∀ p_new_bound 
                        ((Cap p_new_bound I) -o 
@@ -227,7 +326,24 @@
                        (I -o 
                        (((Cap p_new_bound I) ⊗ (! (Ptr p_new_bound))) ⊗ I))))))
               #:equiv alpha-eq-T?)
- 
+  
+  (define list-type
+    (term
+     (I + (Int ⊗ (∃ p ((Cap p α) ⊗ (! (Ptr p))))))))
+  
+  (define rec-list-type
+    (term
+      (μ α ,list-type)))
+  
+  (redex-match? L3 T list-type)
+  (redex-match? L3 T rec-list-type)
+  
+  (test-equal (term (type-subst ,list-type α ,list-type))
+              (term (I + (Int ⊗ (∃ p ((Cap p 
+                    (I + (Int ⊗ (∃ p1 ((Cap p1 α) ⊗ (! (Ptr p1)))))))
+                                      ⊗ (! (Ptr p)))))))
+              #:equiv alpha-eq-T?)
+  
 )
    
 
