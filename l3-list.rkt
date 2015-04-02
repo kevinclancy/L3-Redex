@@ -108,8 +108,33 @@
    (λ (x_n Int)
      (λ (x_list ,NatList)
        (fold [,NatList]
-       (inr (x_n / (new  x_list)) as ,NLBody))))))
+             (inr (x_n / (new x_list)) as ,NLBody))))))
 
+
+(define l1
+  (term 
+   ((,cons 8) ((,cons 3) ,nil))))
+       
+
+#|
+(define length
+  (term
+   (λ (x_list ,NatList)
+     (case (unfold [,NatList] x_list) of
+       (inl x_l) => (let * = x_l in 0) \| 
+       (inr x_r) => (1 + (length x_r))))))
+
+|#
+
+
+;; Takes a list and returns a pair with its components.
+(define split
+  (term
+   (λ (x_list (Int ⊗ (∃ p ((Cap p ,NatList) ⊗ (! (Ptr p))))))
+     (let (x_i / x_epkg) = x_list in
+     (let (p // x_next) = (free x_epkg) in
+     (x_i / x_next))))))
+       
 
 (module+ test
  
@@ -117,7 +142,11 @@
   (check-true (redex-match? L3 T NLBody))
   (check-true (redex-match? L3 e nil))
   (check-true (redex-match? L3 e cons))
-
+  (check-true (redex-match? L3 e l1))
+  
   (check-true (judgment-holds (L3-type () () ,nil T type-env)))
   (check-true (judgment-holds (L3-type () () ,cons T type-env)))
+  (check-true (judgment-holds (L3-type () () ,l1 T type-env)))
+  (check-true (judgment-holds (L3-type () () ,split T type-env)))
+  
 )

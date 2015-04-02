@@ -14,6 +14,8 @@
   ;; Evaluation contexts
   (E ::= 
      hole
+     (E + e)
+     (n + E)
      (let * = E in e)
      (E / e)
      (v / E)
@@ -31,17 +33,22 @@
      (E L)
      (L // E)
      (let (P // X) = E in e)
-     (inl E)
-     (inr E)
-     (case E of (inl X) => e_l \| (inr X) => e_r)
+     (inl E as T)
+     (inr E as T)
+     (case E of (inl X_1) => e_l \| (inr X_2) => e_r)
      (fold [T] E)
      (unfold [T] E)
-     ))
+     (fix E)))
+     ;(fun X_fname (X_in : T_in) : T_out = E)))
 
 (define ->L3 
   (reduction-relation 
    L3-rr 
    #:domain (store e)
+   (--> 
+    (store (in-hole E (n_1 + n_2)))
+    (store (in-hole E n_3))
+    (where n_3 ,(+ (term n_1) (term n_2))))
    (--> ;; let-unit
     ;; Should this be let * = * ???
     (store (in-hole E (let * = v in e)))
@@ -98,18 +105,25 @@
     (store (in-hole E (case (inl v as T) of 
                        (inl X_l) => e_l \|
                        (inr X_r) => e_r)))
-    (store (in-hole E (subs e_l X_l v)))
+    (store (in-hole E (subst e_l X_l v)))
     case-inl)
    (--> ;; case-inr 
     (store (in-hole E (case (inr v as T) of 
                         (inl X_l) => e_l \|
                         (inr X_r) => e_r)))
-    (store (in-hole E (subs e_r X_r v)))
+    (store (in-hole E (subst e_r X_r v)))
     case-inr)
    (--> ;; unfld-fld
-    (store (in-hole E (unfold [T_1] (fold [T_2] v))))
-    (store (in-hole E v))
-    unfld-fld)))
+    (store (in-hole E (unfold [T_1] (fold [T_2] e))))
+    (store (in-hole E e))
+    unfld-fld)
+   (--> ;; rec-fun
+    (store (in-hole E (fix (λ (X T) e))))
+    (store (in-hole E (subst e X (fix (λ (X T) e)))))    
+    ;(store (in-hole E (fun X_fname (X_in : T_in) : T_out = e)))
+    ;(store (in-hole E (subst e X_fname (fun X_fname (X_in : T_in) : T_out = e))))
+    rec-fun)
+    ))
 
 (define f (term (Λ p
                    
@@ -193,6 +207,11 @@
   [------------------------------------------------------------------- Num
    (L3-type loc-env type-env n Int type-env)]
   
+  [ (L3-type loc-env type-env_1 e_1 Int type-env_2)
+    (L3-type loc-env type-env_2 e_2 Int type-env_3)
+   -------------------------------------------------------------------- Sum-Num
+   (L3-type loc-env type-env_1 (e_1 + e_2) Int type-env_3)]
+  
   [(where #t  (loc-subset (type-FLV T) loc-env))
    (where #f ,(member (term X) (term (X_1 ...))))
    ------------------------------------------------------------------- Var
@@ -232,13 +251,14 @@
     (L3-type loc-env ((U_env2 X_env2 T_env2) ... (♭ X_l T_1)) e_l
              T
              ((U_env3 X_env3 T_env3) ... (♯ X_l T_1)))
-    (L3-type loc-env ((U_env3 X_env3 T_env3) ... (♭ X_r T_2)) e_r
+    (L3-type loc-env ((U_env2 X_env2 T_env2) ... (♭ X_r T_2)) e_r
              T
-             ((U_env4 X_env4 T_env4) ... (♯ X_r T_2)))         
+             ((U_env3 X_env3 T_env3) ... (♯ X_r T_2)))
+    ;(when #t ,(equal? (term ((U_env3 X_env3 T_env3) ...) ((U_env4 X_env4 T_env4) ...)))
    --------------------------------------------------------------------- Case
    (L3-type loc-env type-env_1 (case e_c of (inl X_l) => e_l \| (inr X_r) => e_r)
             T
-            ((U_env4 X_env4 T_env4) ...))]
+            ((U_env3 X_env3 T_env3) ...))]
 
 
   
@@ -253,7 +273,7 @@
    (L3-type loc-env type-env_1 (e_1 / e_2) (T_1 ⊗ T_2) type-env_3)]
   
   [(L3-type loc-env type-env_1 v T type-env_2)
-   (where #t (tenv-unrestricted 
+   (where #t (tenv-unrestricted
               (used-tenv-entries type-env_1 type-env_2)))
    ------------------------------------------------------------------- Bang
   (L3-type loc-env type-env_1 (! v) (! T) type-env_2)]

@@ -9,6 +9,7 @@
   (e ::= 
      *                             ;; unit
      n                             ;; numbers
+     (e + e)                       ;; number addition
      (let * = e in e)              ;; unit elimination 
      (e / e)                       ;; pair
      (let (X / X) = e in e)        ;; pair elimination
@@ -31,12 +32,14 @@
      ;; Sum type extensions
      (inl e as T)
      (inr e as T)
-     (case e_c of (inl X) => e_l \| (inr X) => e_r)
+     (case e_c of (inl X_1) => e_l \| (inr X_2) => e_r)
      ;; Recursive types extension
      (fold [T] e)
-     (unfold [T] e))
+     (unfold [T] e)
+     ;;Recursive functions
+     (fix e))
+     ;(fun X_fname (X T_1) : T_2 = e))
      
-
   ;term variable
   (X ::= 
      x y z (variable-prefix x) (variable-prefix y) (variable-prefix z)) 
@@ -52,7 +55,8 @@
   
   (tX ::=
       α β γ (variable-prefix α) (variable-prefix β) (variable-prefix γ))
-  
+  ;(fun-name ::= 
+   ;         f (variable-prefix f))
   
   ;values
   (v ::= 
@@ -70,9 +74,11 @@
      (inl v as T)
      (inr v as T)
      ;; Recursive type extension
-     (fold [T] v))
+     (fold [T] v)
+     (fix v))
   (n ::=
      number)
+  
   ;types
   (T ::=
      tX           ;; Type variable

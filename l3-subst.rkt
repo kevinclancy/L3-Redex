@@ -46,6 +46,10 @@
   FV-acc : (X ...) e -> (X ...)
   [(FV-acc (X ...) *) ()]
   [(FV-acc (X ...) n) ()]
+  [(FV-acc (X ...) (e_1 + e_2))
+   (X_fv1 ... X_fv2 ...) 
+   (where (X_fv1 ...) (FV-acc (X ...) e_1))
+   (where (X_fv2 ...) (FV-acc (X ...) e_2))]
   [(FV-acc (X ...) (let * = e_1 in e_2))
    (X_fv1 ... X_fv2 ...) 
    (where (X_fv1 ...) (FV-acc (X ...) e_1))
@@ -116,6 +120,8 @@
   subst : e_1 X v -> e
   [(subst * X v) *]
   [(subst n X v) n]
+  [(subst (e_1 + e_2) X v)
+   ((subst e_1 X v) + (subst e_2 X v))]
   [(subst (let * = e_11 in e_12) X v)
    (let * = (subst e_11 X v) in (subst e_12 X v))]
   [(subst (e_11 / e_12) X v) ((subst e_11 X v) / (subst e_12 X v))]
@@ -252,7 +258,12 @@
      (inr X_fresh) => (subst (subst e_r X_b X_fresh) X v))
    (where X_fresh ,(variable-not-in 
                     (term ((FV e_l) (FV e_r) (FV v))) 
-                    (term X_b)))])
+                    (term X_b)))]
+  [(subst (fold [T] e) X v)
+   (fold [T] (subst e X v))]
+  [(subst (unfold [T] e) X v)
+   (unfold [T] (subst e X v))]
+  )
 
 
 (define-judgment-form L3

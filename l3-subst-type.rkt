@@ -102,8 +102,9 @@
   [(type-substp (∃ P_0 T) P_1 P_0)
    (∃ P_2 (type-substp T_ren P_1 P_0))
    (where P_2 ,(variable-not-in (term (P_0 T)) (term P_0)))
-   (where T_ren (type-substp T P_0 P_2))])
-
+   (where T_ren (type-substp T P_0 P_2))]
+  [(type-substp (μ tX T) P loc)
+   (μ tX (type-substp T P loc))])
 
 
 (define-judgment-form L3
