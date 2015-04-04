@@ -359,6 +359,7 @@
             ((U_env3 X_env3 T_env3) ... (♯ X T_1prime)))
    
    (where #f (loc-subset (P) (type-FLV T_2)))
+   (where #f (loc-subset (P) (loc_env ...))) ;this prohibits location shadowing: see "location shadowing" example below
    ------------------------------------------------------------------ Let-LPack
    (L3-type (loc_env ...) type-env_1 (let (P // X) = e_1 in e_2) 
             T_2 
@@ -652,8 +653,19 @@
             (Cap p (I -o I)) 
             ())))
   
-  
-  
+  ;location shadowing is forbidden because locations occur in types
+ (check-false 
+  (judgment-holds 
+   (L3-type () () (let (p // x-cap-ptr-1) = (new 1) in
+                  (let (p // x-cap-ptr-2) = (new 2) in
+                  (let (x-cap-1 / x-bang-ptr-1) = x-cap-ptr-1 in
+                  (let (x-cap-2 / x-bang-ptr-2) = x-cap-ptr-2 in
+                  (let (! x-ptr-1) = x-bang-ptr-1 in
+                  (let (! x-ptr-2) = x-bang-ptr-2 in
+                  ; at runtime, this would get stuck because each swap would
+                  ; have a mismatch between the locations of the capabilities and pointers
+                  ; hence, we prohibit location shadowing to prevent this from type checking
+                  (p // ((swap x-cap-1 x-ptr-2 3) / (swap x-cap-2 x-ptr-1 4))))))))) (∃ p (((Cap p Int) ⊗ Int) ⊗ ((Cap p Int) ⊗ Int))) ())))
   
   (define lrswap
     (term 
