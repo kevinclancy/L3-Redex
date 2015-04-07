@@ -392,6 +392,13 @@
     (L3-type loc-env type-env_1 (unfold [(μ tX T)] e) 
              (type-subst T tX (μ tX T)) 
              type-env_2)]
+  
+  
+  [ (L3-type loc-env type-env_1 e (T -o T) type-env_2)
+    (where #t (tenv-unrestricted (used-tenv-entries type-env_1 type-env_2)))
+   -------------------------------------------------------------------- T-Fix
+   (L3-type loc-env type-env_1 (fix e) T type-env_2)]
+  
   )
   
 (module+ test
@@ -666,36 +673,5 @@
                   ; have a mismatch between the locations of the capabilities and pointers
                   ; hence, we prohibit location shadowing to prevent this from type checking
                   (p // ((swap x-cap-1 x-ptr-2 3) / (swap x-cap-2 x-ptr-1 4))))))))) (∃ p (((Cap p Int) ⊗ Int) ⊗ ((Cap p Int) ⊗ Int))) ())))
-  
-  (define lrswap
-    (term 
-     (λ (xref (∃ p ((Cap p Int) ⊗ (!(Ptr p))))) 
-       (λ (x Int)
-         (let (p // xcp)   = xref in
-         (let (xc0 / xp0) = xcp in         
-         (let (xp1 / xp2) = (dupl xp0) in
-         (let (! xp4)      = xp2 in 
-         (let (xc1 / y)    = (swap xc0 xp4 x) in
-         ((p // (xc1 / xp1)) / y))))))))))  
-      
-  ;; Apply lrswap to change an integer value stored in memory.
-  (define swapint
-    (term 
-     (let (ploc // xpck) = (new 5) in
-       ((,lrswap (ploc // xpck)) 10))))
-     
-  
-  (redex-match? L3 e lrswap)
-  (redex-match? L3 e swapint)
-  
-  (traces ->L3 (term (() ,swapint)))   
-  
-;  (build-derivations (L3-type () () ,lrswap T ()))
 
-
-
-
-
-
-  
   )

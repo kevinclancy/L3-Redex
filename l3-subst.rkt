@@ -4,6 +4,14 @@
 
 (provide FV FLV subst substp alpha-eq?)
 
+;; This file provides functions related to substitution in expressions. We 
+;; consider two types of substitutions:
+;; - On regular variables
+;; - On location variables
+;; We provide a set of functions for each case. FV and subst for the first
+;; and FLV and substp for the second.
+
+
 ;; -----------------------------------------------------------------------------
 ;; Auxiliary functions
 ;; -----------------------------------------------------------------------------
@@ -41,7 +49,7 @@
    (FV-value (X_env ...) v)])
 
 
-;;auxiliary function for FV
+;; auxiliary function for FV
 (define-metafunction L3
   FV-acc : (X ...) e -> (X ...)
   [(FV-acc (X ...) *) ()]
@@ -99,24 +107,28 @@
    (FV-acc (X_fv1 ...) e)]
   [(FV-acc (X_fv1 ...) (inr e as T))
    (FV-acc (X_fv1 ...) e)]
-  [(FV-acc (X_env ...) (case e_c of (inl X) => e_l \| (inr X) => e_r))
+  [(FV-acc (X_env ...) (case e_c of (inl X_l) => e_l \| (inr X_r) => e_r))
    (X_envc ... X_envl ... X_envr ...)
-   (where (X_envc ...) (FV-acc (X X_env ...) e_c))
-   (where (X_envl ...) (FV-acc (X X_env ...) e_l))
-   (where (X_envr ...) (FV-acc (X X_env ...) e_r))])
+   (where (X_envc ...) (FV-acc (X_env ...) e_c))
+   (where (X_envl ...) (FV-acc (X_l X_env ...) e_l))
+   (where (X_envr ...) (FV-acc (X_r X_env ...) e_r))]
+  [(FV-acc (X_env ...) (fix e))
+   (FV-acc (X_env ...) e)]
+  [(FV-acc (X_env ...) (fold [T] e))
+   (FV-acc (X_env ...) e)]
+  [(FV-acc (X_env ...) (unfold [T] e))
+   (FV-acc (X_env ...) e)])
 
 
-
-; returns list (from left to right) of all free variables of input expression
+;; Returns list (from left to right) of all free variables of input expression
 (define-metafunction L3
   FV : e -> (X ...)
   [(FV e) 
    ,(remove-duplicates (term (FV-acc () e)))])
 
 
-
+;; Substitute v for all occurences of X in e_1
 (define-metafunction L3
-  ;substitute v for all occurences of X in e_1
   subst : e_1 X v -> e
   [(subst * X v) *]
   [(subst n X v) n]
@@ -124,8 +136,7 @@
    ((subst e_1 X v) + (subst e_2 X v))]
   [(subst (let * = e_11 in e_12) X v)
    (let * = (subst e_11 X v) in (subst e_12 X v))]
-  [(subst (e_11 / e_12) X v) ((subst e_11 X v) / (subst e_12 X v))]
-  
+  [(subst (e_11 / e_12) X v) ((subst e_11 X v) / (subst e_12 X v))] 
   ;; case let-pair1: subst on one of the bounded variables. 
   ;; only subst on e_1. No effect on e_2. 
   [(subst (let (X / X_2) = e_1 in e_2) X v) 
@@ -211,7 +222,7 @@
                      (term ((FV v) (FV e_2) X)) 
                      (term X_0)))]
 
-[(subst (dupl e) X v) (dupl (subst e X v))]
+  [(subst (dupl e) X v) (dupl (subst e X v))]
   [(subst (drop e) X v) (drop (subst e X v))]
   [(subst (ptr L) X v) (ptr L)]
   [(subst cap X v) cap]
@@ -226,12 +237,6 @@
                     (term P)))]
   [(subst (e loc) X v) ((subst e X v) loc)]
   [(subst (loc // e) X v) (loc // (subst e X v))]
-  ;; let acts as a binder for P and X. X shouldn't be replaced inside of e_2.
-  ;; only change e_1. Why change P? we are only replacing regular vars, not loc
-  ;; vars.
- ; [(subst (let (P // X) = e_1 in e_2) X v)
- ;  (let (P_prime // X) = (subst e_1 X v) in (subst (substp e_2 P P_prime) X v))
- ;  (where P_prime ,(variable-not-in (term ((FLV e_2) (FLV v)))))]
   [(subst (let (P // X) = e_1 in e_2) X v)
    (let (P // X) = (subst e_1 X v) in e_2)]
   ;; If binded X is different from what we want to substitute.
@@ -263,9 +268,12 @@
    (fold [T] (subst e X v))]
   [(subst (unfold [T] e) X v)
    (unfold [T] (subst e X v))]
+  [(subst (fix e) X v)
+   (fix (subst e X v))]
   )
 
-
+;; Judgment to check if two expressions are alpha-equivalent with respect to 
+;; subst. For testing purposes.
 (define-judgment-form L3
   #:mode (alpha-eq? I I)
   #:contract (alpha-eq? e e)
@@ -409,14 +417,11 @@
 
 
 
-
-
-
-
-
 ;; -----------------------------------------------------------------------------
 ;; Location variables
 ;; -----------------------------------------------------------------------------
+
+;; Functions related to substitution of location variables on expressions.
 
 (define-metafunction L3
   FLV-value : (P ...) v -> (P ...)
@@ -460,11 +465,7 @@
    (where (P_fl1 ...) (FLV-acc (P_env ...) e_1))
    (where (P_fl2 ...) (FLV-acc (P_env ...) e_2))]
   [(FLV-acc (P_env ...) X) ()]
-  ;; This would imply that location variables on types are related to 
-  ;; location variable names on expressions, which I don't think is true.
   [(FLV-acc (P_env ...) (λ (X T) e))
-   ;(loc_T ... loc_e ...)
-   ;(where (loc_T ...) (type-FL (loc ...) T))
    (FLV-acc (P_env ...) e)]
   [(FLV-acc (P_env ...) (e_1 e_2)) 
    (P_fl1 ... P_fl2 ...) 
@@ -522,10 +523,8 @@
   FLV : e -> (loc ...)
   [(FLV e) (FLV-acc () e)])
 
-
-; TODO: attach type ascriptions to let bindings?
+;; Substitute loc for P in e_in
 (define-metafunction L3
-  ;substitute loc for p in e_in
   substp : e_in P loc -> e_out
   [(substp * P loc) *]
   [(substp n P loc) n]
@@ -585,7 +584,13 @@
   [(substp (case e_c of (inl X) => e_l \| (inr X) => e_r) P loc)
    (case (substp e_c P loc) of 
      (inl X) => (substp e_l P loc) \| 
-     (inr X) => (substp e_r P loc))])
+     (inr X) => (substp e_r P loc))]
+  [(substp (unfold [T] e) P loc)
+   (unfold [(type-substp T P loc)] (substp e P loc))]
+  [(substp (fold [T] e) P loc)
+   (fold [(type-substp T P loc)] (substp e P loc))]
+  [(substp (fix e) P loc)
+   (fix (substp e P loc))])
 
 
 

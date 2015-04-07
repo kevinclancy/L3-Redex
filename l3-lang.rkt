@@ -17,7 +17,7 @@
      (λ (X T) e)                   ;; abstraction
      (e e)                         ;; application
      (! v)                         ;; unrestricted value
-     (let (! X) = e in e)          ;;  
+     (let (! X) = e in e)          ;; let-bang 
      (dupl e)                      ;; duplicate !-type
      (drop e)                      ;; eliminate !-type
      (ptr L)                       ;; pointer to a location
@@ -36,29 +36,26 @@
      ;; Recursive types extension
      (fold [T] e)
      (unfold [T] e)
-     ;;Recursive functions
+     ;;Recursive functions extension
      (fix e))
-     ;(fun X_fname (X T_1) : T_2 = e))
      
-  ;term variable
+  ; Term variable
   (X ::= 
      x y z (variable-prefix x) (variable-prefix y) (variable-prefix z)) 
-  ;location constant or variable
+  ; Location constant or variable
   (loc ::= 
        L P) 
-  ;location constant
+  ; Location constant
   (L ::= 
      l m n (variable-prefix l) (variable-prefix m) (variable-prefix n)) 
-  ;location variable
+  ; Location variable
   (P ::= 
      p q r (variable-prefix p) (variable-prefix q) (variable-prefix r))
-  
+  ; Type variables
   (tX ::=
       α β γ (variable-prefix α) (variable-prefix β) (variable-prefix γ))
-  ;(fun-name ::= 
-   ;         f (variable-prefix f))
   
-  ;values
+  ; Values
   (v ::= 
      *
      n
@@ -75,11 +72,12 @@
      (inr v as T)
      ;; Recursive type extension
      (fold [T] v)
+     ;; Recursive function extension
      (fix v))
   (n ::=
      number)
   
-  ;types
+  ; Types
   (T ::=
      tX           ;; Type variable
      I            ;; unit

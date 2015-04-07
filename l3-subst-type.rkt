@@ -4,10 +4,24 @@
 
 (provide type-FLV type-substp type-subst alpha-eq-T?)
 
+;; This file provides functions related to substitution in types. We 
+;; consider two types of substitutions:
+;; - On type variables (due to definition of recursive types)
+;; - On location variables
+;; We provide a set of functions for each case. type-subst for the first, and 
+;; type-FLV and type-subst for the second.
+
+;; -----------------------------------------------------------------------------
+;; Auxiliary functions
+;; -----------------------------------------------------------------------------
+
 (define (member? u lst)
   (not (equal? (member u lst) #f)))
 
 
+;; -----------------------------------------------------------------------------
+;; Substitution on location variables
+;; -----------------------------------------------------------------------------
 
 (define-metafunction L3
   type-FLV-acc : (P ...) T -> (P ...)
@@ -232,7 +246,6 @@
    ,(remove-duplicates (term (type-FV-acc () T)))])
 
 
-
 ;; Type substitution for types
 (define-metafunction L3
   type-subst : T_in tX T_new -> T_out
@@ -272,6 +285,7 @@
 ;; TESTS
 
 (module+ test
+  (require rackunit)
   
   (define type_1
     (term
@@ -295,24 +309,25 @@
   
   
  
-  (redex-match? L3 T type_1) 
+  (check-true (redex-match? L3 T type_1)) 
   ;; Simple substitution without quantifiers
   (test-equal (term (type-substp ,type_1 p_1 p_new)) 
-              (term ((Ptr p_new) ⊗ (Ptr p_2))))
+                          (term ((Ptr p_new) ⊗ (Ptr p_2))))
   
   ;; Location type substitution case ∀1 
-  (redex-match? L3 T type_2) 
+  (check-true (redex-match? L3 T type_2)) 
   (test-equal (term (type-substp ,type_2 p_bound p_new)) 
-              (term (∀ p_bound 
-                       ((Cap p_bound I) -o 
-                       (((! (Ptr p_bound)) ⊗ (! (Ptr p_bound))) -o 
-                       (I -o 
-                       (((Cap p_bound I) ⊗ (! (Ptr p_bound))) ⊗ I)))))))
+                  (term (∀ p_bound 
+                           ((Cap p_bound I) -o 
+                           (((! (Ptr p_bound)) ⊗ (! (Ptr p_bound))) -o 
+                           (I -o 
+                           (((Cap p_bound I) ⊗ (! (Ptr p_bound))) ⊗ I)))))))
   
   ;; Location type substitution case ∀2
-  (redex-match? L3 T type_3) 
-  (test-equal (term (type-substp ,type_3 p_not_bound p_new)) 
-              (term (∀ p_bound 
+  (check-true (redex-match? L3 T type_3)) 
+ 
+   (test-equal (term (type-substp ,type_3 p_not_bound p_new)) 
+               (term (∀ p_bound 
                        ((Cap p_bound I) -o 
                        (((! (Ptr p_new)) ⊗ (! (Ptr p_new))) -o 
                        (I -o 
@@ -320,7 +335,7 @@
   
   
   ;; Location type substitution case ∀3. Check equality modulo α-conversion.
-  (test-equal (term (type-substp ,type_3 p_not_bound p_bound)) 
+   (test-equal (term (type-substp ,type_3 p_not_bound p_bound)) 
               (term (∀ p_new_bound 
                        ((Cap p_new_bound I) -o 
                        (((! (Ptr p_bound)) ⊗ (! (Ptr p_bound))) -o 
@@ -336,16 +351,15 @@
     (term
       (μ α ,list-type)))
   
-  (redex-match? L3 T list-type)
-  (redex-match? L3 T rec-list-type)
+  (check-true (redex-match? L3 T list-type))
+  (check-true (redex-match? L3 T rec-list-type))
   
   (test-equal (term (type-subst ,list-type α ,list-type))
               (term (I + (Int ⊗ (∃ p ((Cap p 
                     (I + (Int ⊗ (∃ p1 ((Cap p1 α) ⊗ (! (Ptr p1)))))))
                                       ⊗ (! (Ptr p)))))))
               #:equiv alpha-eq-T?)
-  
-)
+  )
    
 
 
